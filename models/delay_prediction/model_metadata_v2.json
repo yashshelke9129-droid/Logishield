@@ -1,0 +1,155 @@
+{
+    "project": "LogiShield",
+    "model_name": "Shipment Delay Predictor V2",
+    "model_type": "RandomForestClassifier",
+    "model_version": "2.0.0",
+    "training_rows": 80000,
+    "target": "delay_target",
+    "target_definition": "1 when actual delivery occurs after expected delivery time",
+    "leakage_protection": true,
+    "numerical_features": [
+        "quantity_units",
+        "weight_kg",
+        "unit_weight_kg",
+        "unit_price",
+        "capacity_kg",
+        "fuel_efficiency_km_per_litre",
+        "distance_km",
+        "estimated_time_hours",
+        "base_cost",
+        "route_risk_score",
+        "weather_severity",
+        "traffic_severity",
+        "active_disruptions",
+        "max_disruption_severity",
+        "departure_hour",
+        "departure_day_of_week",
+        "departure_month",
+        "departure_week",
+        "is_weekend",
+        "is_peak_departure",
+        "vehicle_utilization",
+        "vehicle_remaining_capacity",
+        "distance_per_hour",
+        "cost_per_km",
+        "shipment_value",
+        "geographic_delta",
+        "is_monsoon",
+        "is_festival_season",
+        "has_active_disruption",
+        "has_severe_disruption",
+        "has_bad_weather",
+        "has_heavy_traffic",
+        "weather_traffic_interaction",
+        "disruption_weather_interaction",
+        "disruption_traffic_interaction"
+    ],
+    "categorical_features": [
+        "product_category",
+        "source_state",
+        "destination_state",
+        "vehicle_type",
+        "route_status",
+        "weather_condition",
+        "traffic_level"
+    ],
+    "metrics": {
+        "accuracy": 0.67015,
+        "precision": 0.4070954155191965,
+        "recall": 0.46110091743119264,
+        "f1_score": 0.4324184805988127,
+        "roc_auc": 0.6516696364954759,
+        "confusion_matrix": [
+            [
+                10890,
+                3660
+            ],
+            [
+                2937,
+                2513
+            ]
+        ]
+    },
+    "top_features": [
+        {
+            "feature": "numeric__vehicle_utilization",
+            "importance": 0.0519375900758703
+        },
+        {
+            "feature": "numeric__vehicle_remaining_capacity",
+            "importance": 0.051156119274711774
+        },
+        {
+            "feature": "numeric__quantity_units",
+            "importance": 0.05114182646781767
+        },
+        {
+            "feature": "numeric__shipment_value",
+            "importance": 0.05081080076954169
+        },
+        {
+            "feature": "numeric__weight_kg",
+            "importance": 0.05020198016442418
+        },
+        {
+            "feature": "numeric__departure_week",
+            "importance": 0.04066149259749852
+        },
+        {
+            "feature": "numeric__route_risk_score",
+            "importance": 0.03506523860561408
+        },
+        {
+            "feature": "numeric__departure_hour",
+            "importance": 0.03496860870291645
+        },
+        {
+            "feature": "numeric__cost_per_km",
+            "importance": 0.0340025358570516
+        },
+        {
+            "feature": "numeric__distance_per_hour",
+            "importance": 0.0339168601237834
+        },
+        {
+            "feature": "numeric__base_cost",
+            "importance": 0.03160431864388337
+        },
+        {
+            "feature": "numeric__estimated_time_hours",
+            "importance": 0.03153380090453716
+        },
+        {
+            "feature": "numeric__distance_km",
+            "importance": 0.03109344758746623
+        },
+        {
+            "feature": "numeric__geographic_delta",
+            "importance": 0.030806667359693823
+        },
+        {
+            "feature": "numeric__unit_price",
+            "importance": 0.027488125152547824
+        },
+        {
+            "feature": "numeric__unit_weight_kg",
+            "importance": 0.027392062895824798
+        },
+        {
+            "feature": "numeric__departure_month",
+            "importance": 0.02463680775641576
+        },
+        {
+            "feature": "numeric__departure_day_of_week",
+            "importance": 0.024351768428557862
+        },
+        {
+            "feature": "numeric__max_disruption_severity",
+            "importance": 0.018941173470551697
+        },
+        {
+            "feature": "numeric__weather_traffic_interaction",
+            "importance": 0.018169218683782223
+        }
+    ]
+}

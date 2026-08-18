@@ -1,0 +1,60 @@
+{
+    "model_name": "LogiShield Shipment Delay Predictor",
+    "model_type": "RandomForestClassifier",
+    "model_version": "1.0.0",
+    "training_rows": 80000,
+    "numerical_features": [
+        "quantity_units",
+        "weight_kg",
+        "unit_weight_kg",
+        "unit_price",
+        "capacity_kg",
+        "fuel_efficiency_km_per_litre",
+        "distance_km",
+        "estimated_time_hours",
+        "base_cost",
+        "route_risk_score",
+        "departure_hour",
+        "departure_day_of_week",
+        "departure_month",
+        "departure_week",
+        "is_weekend",
+        "is_peak_departure",
+        "vehicle_utilization",
+        "vehicle_remaining_capacity",
+        "distance_per_hour",
+        "cost_per_km",
+        "shipment_value",
+        "geographic_delta",
+        "is_monsoon",
+        "is_festival_season"
+    ],
+    "categorical_features": [
+        "product_category",
+        "source_state",
+        "destination_state",
+        "vehicle_type",
+        "route_status"
+    ],
+    "metrics": {
+        "accuracy": 0.6667,
+        "precision": 0.7779798106464355,
+        "recall": 0.7988154252237173,
+        "f1_score": 0.7882599580712788,
+        "roc_auc": 0.5073831198959109,
+        "confusion_matrix": [
+            [
+                926,
+                3541
+            ],
+            [
+                3125,
+                12408
+            ]
+        ]
+    },
+    "target": {
+        "name": "delay_target",
+        "definition": "1 when actual delivery time is later than expected delivery time; otherwise 0."
+    }
+}

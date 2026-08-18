@@ -1,0 +1,43 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "frontend": {
+      "root": "frontend/",
+      "framework": "nextjs"
+    },
+    "backend": {
+      "root": "backend/",
+      "entrypoint": "main:app",
+      "framework": "fastapi",
+      "includeFiles": [
+        "../models/delay_prediction/shipment_delay_model_v2.joblib"
+      ],
+      "excludeFiles": [
+        ".venv/**",
+        "__pycache__/**",
+        "*.pyc",
+        "*.pyo",
+        "main.py.backup",
+        "main.py.before_forecasting",
+        "generate_data.py",
+        "improve_training_data.py",
+        "test_database.py",
+        "New Text Document.txt"
+      ]
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "frontend"
+      }
+    }
+  ]
+}

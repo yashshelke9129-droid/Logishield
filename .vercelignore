@@ -1,0 +1,20 @@
+.git
+.venv
+backend/.venv
+frontend/node_modules
+frontend/.next
+node_modules
+**/__pycache__
+**/*.pyc
+**/*.pyo
+*.log
+.env
+.env.*
+!.env.example
+
+backend/main.py.backup
+backend/main.py.before_forecasting
+backend/generate_data.py
+backend/improve_training_data.py
+backend/test_database.py
+backend/New Text Document.txt

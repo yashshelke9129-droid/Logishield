@@ -48,3 +48,14 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+.vercel
+models/delay_prediction/*.joblib
+*.joblib
+*.pkl
+*.pickle
+openapi_local.json
+backend/.venv/
+backend/.venv313/
+frontend/node_modules/
+frontend/.next/
+.venv/

@@ -28,6 +28,7 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
+from huggingface_hub import hf_hub_download
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -126,13 +127,44 @@ engine = create_engine(
 # MODEL
 # ============================================================
 
-if not MODEL_FILE.exists():
-    raise RuntimeError(
-        "LogiShield V2 model not found:\n"
-        f"{MODEL_FILE}\n\n"
-        "Train the model first."
-    )
+# Render does not have to contain the large .joblib model in the Git repo.
+# If the model is missing locally, download it from Hugging Face.
+HF_MODEL_REPO = os.getenv(
+    "HF_MODEL_REPO",
+    "Yash8939/logishield-delay-model"
+)
 
+HF_MODEL_FILENAME = os.getenv(
+    "HF_MODEL_FILENAME",
+    "shipment_delay_model_v2.joblib"
+)
+
+HF_MODEL_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
+
+if not MODEL_FILE.exists():
+    try:
+        MODEL_DIR.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        downloaded_model = hf_hub_download(
+            repo_id=HF_MODEL_REPO,
+            filename=HF_MODEL_FILENAME,
+            token=HF_MODEL_TOKEN,
+            local_dir=str(MODEL_DIR)
+        )
+
+        MODEL_FILE = Path(downloaded_model)
+
+    except Exception as error:
+        raise RuntimeError(
+            "LogiShield V2 model could not be loaded.\n\n"
+            f"Expected local model: {MODEL_FILE}\n"
+            f"Hugging Face repository: {HF_MODEL_REPO}\n"
+            f"Hugging Face filename: {HF_MODEL_FILENAME}\n\n"
+            f"Download error: {error}"
+        ) from error
 
 model = joblib.load(MODEL_FILE)
 
@@ -155,14 +187,25 @@ app = FastAPI(
 # CORS
 # ============================================================
 
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
+cors_origins.extend([
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+])
+
+# Remove duplicates while preserving order.
+cors_origins = list(dict.fromkeys(cors_origins))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1273,15 +1316,15 @@ def recovery_analysis(
     Pipeline:
 
         Shipment
-            ↓
+            â†“
         ML Delay Prediction
-            ↓
+            â†“
         Recovery Decision Engine
-            ↓
+            â†“
         Route Analysis
-            ↓
+            â†“
         Vehicle Analysis
-            ↓
+            â†“
         Recommended Recovery Plan
     """
 

@@ -25,10 +25,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import joblib
 import numpy as np
 import pandas as pd
-from huggingface_hub import hf_hub_download
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -127,47 +125,110 @@ engine = create_engine(
 # MODEL
 # ============================================================
 
-# Render does not have to contain the large .joblib model in the Git repo.
-# If the model is missing locally, download it from Hugging Face.
-HF_MODEL_REPO = os.getenv(
-    "HF_MODEL_REPO",
-    "Yash8939/logishield-delay-model"
-)
+# IMPORTANT:
+# Render Free provides only 512 MB RAM. The original V2 RandomForest
+# joblib file is too large to load safely in that environment and causes
+# the process to be killed with exit status 137.
+#
+# Therefore this deployment uses a lightweight, deterministic runtime
+# risk model. It keeps the same model.predict() / model.predict_proba()
+# interface used by the rest of this file, so the API does not need to be
+# rewritten. It uses the same operational features that were engineered
+# for the V2 predictor: route risk, weather, traffic, disruptions,
+# utilization, distance, time, cost and departure conditions.
+#
+# The full trained RandomForest remains suitable for local/high-memory
+# deployments. This lightweight runtime is specifically for Render Free.
 
-HF_MODEL_FILENAME = os.getenv(
-    "HF_MODEL_FILENAME",
-    "shipment_delay_model_v2.joblib"
-)
+class LightweightDelayModel:
+    """Low-memory delay-risk predictor for Render Free (512 MB)."""
 
-HF_MODEL_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
+    @staticmethod
+    def _clip(value: float, low: float = 0.0, high: float = 1.0) -> float:
+        return max(low, min(high, float(value)))
 
-if not MODEL_FILE.exists():
-    try:
-        MODEL_DIR.mkdir(
-            parents=True,
-            exist_ok=True
+    @classmethod
+    def _risk_probability(cls, row: pd.Series) -> float:
+        def num(name: str, default: float = 0.0) -> float:
+            try:
+                value = row.get(name, default)
+                if value is None or pd.isna(value):
+                    return default
+                return float(value)
+            except Exception:
+                return default
+
+        route_risk = num("route_risk_score")
+        # Support both 0-1 and 0-100 route-risk scales.
+        if route_risk > 1.0:
+            route_risk = route_risk / 100.0
+        route_risk = cls._clip(route_risk)
+
+        weather = cls._clip(num("weather_severity") / 5.0)
+        traffic = cls._clip(num("traffic_severity") / 3.0)
+        disruption = cls._clip(num("max_disruption_severity") / 5.0)
+        disruption_count = cls._clip(num("active_disruptions") / 5.0)
+
+        capacity = num("capacity_kg")
+        weight = num("weight_kg")
+        utilization = num("vehicle_utilization")
+        if utilization <= 0 and capacity > 0:
+            utilization = weight / capacity
+        utilization = cls._clip(utilization)
+
+        distance = num("distance_km")
+        estimated_hours = num("estimated_time_hours")
+        distance_factor = cls._clip(distance / 1500.0)
+        time_factor = cls._clip(estimated_hours / 30.0)
+
+        peak = cls._clip(num("is_peak_departure"))
+        weekend = cls._clip(num("is_weekend"))
+        bad_weather = cls._clip(num("has_bad_weather"))
+        heavy_traffic = cls._clip(num("has_heavy_traffic"))
+        severe_disruption = cls._clip(num("has_severe_disruption"))
+
+        # Operational risk score. The weights deliberately emphasize
+        # disruption/weather/traffic and route risk, while keeping shipment
+        # and vehicle factors meaningful.
+        score = (
+            0.22 * route_risk
+            + 0.17 * weather
+            + 0.15 * traffic
+            + 0.16 * disruption
+            + 0.08 * disruption_count
+            + 0.06 * utilization
+            + 0.05 * distance_factor
+            + 0.04 * time_factor
+            + 0.03 * peak
+            + 0.02 * weekend
+            + 0.01 * bad_weather
+            + 0.01 * heavy_traffic
         )
 
-        downloaded_model = hf_hub_download(
-            repo_id=HF_MODEL_REPO,
-            filename=HF_MODEL_FILENAME,
-            token=HF_MODEL_TOKEN,
-            local_dir=str(MODEL_DIR)
+        if severe_disruption:
+            score += 0.07
+
+        # Calibrate the operational score into a useful probability range.
+        probability = 0.05 + 0.90 * cls._clip(score)
+        return round(cls._clip(probability, 0.01, 0.99), 6)
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        probabilities = [
+            self._risk_probability(row)
+            for _, row in X.iterrows()
+        ]
+        return np.asarray(
+            [[1.0 - p, p] for p in probabilities],
+            dtype=float
         )
 
-        MODEL_FILE = Path(downloaded_model)
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        probabilities = self.predict_proba(X)[:, 1]
+        return (probabilities >= 0.50).astype(int)
 
-    except Exception as error:
-        raise RuntimeError(
-            "LogiShield V2 model could not be loaded.\n\n"
-            f"Expected local model: {MODEL_FILE}\n"
-            f"Hugging Face repository: {HF_MODEL_REPO}\n"
-            f"Hugging Face filename: {HF_MODEL_FILENAME}\n\n"
-            f"Download error: {error}"
-        ) from error
 
-model = joblib.load(MODEL_FILE)
-
+model = LightweightDelayModel()
+MODEL_RUNTIME = "lightweight_render_free"
 
 # ============================================================
 # FASTAPI
@@ -350,7 +411,8 @@ def health():
     return {
         "status": "healthy",
         "database": database_status,
-        "model_loaded": model is not None
+        "model_loaded": model is not None,
+        "model_runtime": MODEL_RUNTIME
     }
 
 
@@ -1276,7 +1338,8 @@ def model_information():
                 "Shipment Delay Predictor V2",
 
             "status":
-                "loaded"
+                "loaded",
+            "runtime": MODEL_RUNTIME
         }
 
     try:

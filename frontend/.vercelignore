@@ -1,0 +1,9 @@
+﻿.next
+node_modules
+*.joblib
+*.pkl
+*.pickle
+*.db
+*.sqlite
+*.sqlite3
+*.sst

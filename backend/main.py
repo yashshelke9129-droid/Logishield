@@ -248,12 +248,18 @@ app = FastAPI(
 # CORS
 # ============================================================
 
+cors_origins_raw = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
+)
+
 cors_origins = [
-    origin.strip()
-    for origin in os.getenv("CORS_ORIGINS", "").split(",")
+    origin.strip().rstrip("/")
+    for origin in cors_origins_raw.split(",")
     if origin.strip()
 ]
 
+# Always allow local development.
 cors_origins.extend([
     "http://localhost:3000",
     "http://127.0.0.1:3000",

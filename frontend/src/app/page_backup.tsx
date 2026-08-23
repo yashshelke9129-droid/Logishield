@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import {
@@ -15,6 +15,7 @@ import {
   Truck,
   Waves,
   Zap,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
@@ -92,6 +93,144 @@ type OverviewData = {
   };
 
   high_risk_shipments: HighRiskShipment[];
+};
+
+type PredictionData = {
+  system: string;
+  model: string;
+  shipment: {
+    shipment_id: number;
+    shipment_code: string;
+    source: string;
+    destination: string;
+    status: string;
+  };
+  prediction: {
+    delay_probability: number;
+    delay_probability_percentage: number;
+    predicted_delayed: boolean;
+    risk_level: string;
+  };
+  conditions: {
+    weather: string;
+    weather_severity: number;
+    traffic: string;
+    traffic_severity: number;
+    active_disruptions: number;
+    maximum_disruption_severity: number;
+    route_risk: number;
+    vehicle_utilization: number;
+  };
+  recommendations: string[];
+  timestamp: string;
+};
+
+type RecoveryRoute = {
+  route_id?: number | null;
+  route_code?: string | null;
+  source_location_id?: number | null;
+  destination_location_id?: number | null;
+  distance_km?: number | null;
+  estimated_time_hours?: number | null;
+  base_cost?: number | null;
+  risk_score?: number | null;
+  route_risk?: number | null;
+  route_status?: string | null;
+  status?: string | null;
+  recovery_score?: number | null;
+};
+
+type RecoveryVehicle = {
+  vehicle_id?: number | null;
+  vehicle_type?: string | null;
+  capacity_kg?: number | null;
+  fuel_efficiency_km_per_litre?: number | null;
+  status?: string | null;
+  utilization_percentage?: number | null;
+  vehicle_score?: number | null;
+};
+
+type RecoveryPath = {
+  base_cost?: number | null;
+  path_id?: string | number | null;
+  route_id?: number | null;
+  route_code?: string | null;
+  source_location_id?: number | null;
+  destination_location_id?: number | null;
+  distance_km?: number | null;
+  estimated_time_hours?: number | null;
+  total_distance_km?: number | null;
+  total_time_hours?: number | null;
+  total_cost?: number | null;
+  cost?: number | null;
+  risk_score?: number | null;
+  recovery_score?: number | null;
+  status?: string | null;
+  route_status?: string | null;
+  route_ids?: number[];
+  route_codes?: string[];
+  segments?: RecoveryRoute[];
+  route_segments?: RecoveryRoute[];
+};
+
+type RecoveryData = {
+  system?: string;
+  engine?: string;
+  version?: string;
+  optimization?: string;
+  optimization_method?: string;
+  route_strategy?: string;
+  destination_reached?: boolean;
+
+  shipment?: {
+    shipment_id?: number;
+    shipment_code?: string;
+    source_location_id?: number;
+    destination_location_id?: number;
+    weight_kg?: number | null;
+    current_vehicle_id?: number | null;
+    current_route_id?: number | null;
+  };
+
+  risk?: {
+    delay_probability?: number | null;
+    delay_probability_percentage?: number | null;
+    intervention?: string | null;
+    weather?: string | null;
+    traffic?: string | null;
+    active_disruptions?: number | null;
+    maximum_disruption_severity?: number | null;
+    operational_risk?: number | null;
+  };
+
+  current_route?: RecoveryRoute | null;
+
+  // Current Recovery Engine response.
+  recovery_paths?: RecoveryPath[];
+  route_segments?: RecoveryRoute[];
+
+  // Kept for backward compatibility with the older response.
+  alternative_routes?: RecoveryRoute[];
+
+  alternative_vehicles?: RecoveryVehicle[];
+
+  recommended_recovery?: {
+    strategy?: string | null;
+    route_id?: number | null;
+    route_code?: string | null;
+    vehicle_id?: number | null;
+    recovery_score?: number | null;
+    route_risk?: number | null;
+    estimated_time_hours?: number | null;
+    distance_km?: number | null;
+    base_cost?: number | null;
+    reason?: string | null;
+  } | null;
+
+  explanation?: string[];
+  option_count?: number | null;
+
+  [key: string]: unknown;
 };
 
 type HighRiskShipment = {
@@ -327,6 +466,78 @@ export default function CommandCenter() {
 
   const highRiskShipments =
     data?.high_risk_shipments ?? [];
+
+  const [selectedShipment, setSelectedShipment] =
+    useState<HighRiskShipment | null>(null);
+  const [prediction, setPrediction] =
+    useState<PredictionData | null>(null);
+  const [recoveryAnalysis, setRecoveryAnalysis] =
+    useState<RecoveryData | null>(null);
+  const [analysisLoading, setAnalysisLoading] =
+    useState(false);
+  const [analysisError, setAnalysisError] =
+    useState("");
+
+  const analyzeShipment = useCallback(
+    async (shipment: HighRiskShipment) => {
+      setSelectedShipment(shipment);
+      setPrediction(null);
+      setRecoveryAnalysis(null);
+      setAnalysisError("");
+      setAnalysisLoading(true);
+
+      try {
+        const [predictionResponse, recoveryResponse] =
+          await Promise.all([
+            fetch(
+              `${API_BASE_URL}/api/v1/predictions/shipment/${shipment.shipment_id}`,
+              { cache: "no-store" }
+            ),
+            fetch(
+              `${API_BASE_URL}/api/v1/recovery/shipment/${shipment.shipment_id}`,
+              { cache: "no-store" }
+            ),
+          ]);
+
+        const predictionJson = await predictionResponse.json();
+        if (!predictionResponse.ok) {
+          throw new Error(
+            predictionJson?.detail ||
+              `Prediction API returned ${predictionResponse.status}`
+          );
+        }
+
+        setPrediction(predictionJson as PredictionData);
+
+        const recoveryJson = await recoveryResponse.json();
+        if (!recoveryResponse.ok) {
+          throw new Error(
+            recoveryJson?.detail ||
+              `Recovery API returned ${recoveryResponse.status}`
+          );
+        }
+
+        setRecoveryAnalysis(recoveryJson as RecoveryData);
+      } catch (err) {
+        console.error("Shipment analysis error:", err);
+        setAnalysisError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load shipment intelligence."
+        );
+      } finally {
+        setAnalysisLoading(false);
+      }
+    },
+    []
+  );
+
+  const closeAnalysis = () => {
+    setSelectedShipment(null);
+    setPrediction(null);
+    setRecoveryAnalysis(null);
+    setAnalysisError("");
+  };
 
   /* ==========================================================
      RISK DISTRIBUTION
@@ -604,7 +815,7 @@ export default function CommandCenter() {
                 risk.high
               }
               label="At-risk shipments"
-              description="Delay probability ≥ 50%"
+              description="Delay probability â‰¥ 50%"
             />
 
             <MetricCard
@@ -615,7 +826,7 @@ export default function CommandCenter() {
               }
               value={risk.critical}
               label="Critical shipments"
-              description="Delay probability ≥ 75%"
+              description="Delay probability â‰¥ 75%"
               danger
             />
 
@@ -634,7 +845,7 @@ export default function CommandCenter() {
               }
               value={vehicles.total}
               label="Vehicles in network"
-              description={`${vehicles.active} active · ${vehicles.available} available`}
+              description={`${vehicles.active} active Â· ${vehicles.available} available`}
             />
 
           </section>
@@ -1118,12 +1329,21 @@ export default function CommandCenter() {
 
                       </div>
 
-                      <Link
-                        href={`/shipments/${shipment.shipment_id}`}
-                        className="text-[8px] text-cyan-300 transition hover:text-white"
-                      >
-                        Inspect
-                      </Link>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => analyzeShipment(shipment)}
+                          className="text-[8px] font-semibold text-cyan-300 transition hover:text-white"
+                        >
+                          Analyze
+                        </button>
+                        <Link
+                          href={`/shipments/${shipment.shipment_id}`}
+                          className="text-[8px] text-slate-500 transition hover:text-cyan-300"
+                        >
+                          Open
+                        </Link>
+                      </div>
 
                     </div>
                   ))
@@ -1134,6 +1354,17 @@ export default function CommandCenter() {
 
           </section>
 
+          {selectedShipment && (
+            <ShipmentAnalysisModal
+              shipment={selectedShipment}
+              prediction={prediction}
+              recovery={recoveryAnalysis}
+              loading={analysisLoading}
+              error={analysisError}
+              onClose={closeAnalysis}
+            />
+          )}
+
           {/* ==================================================
               FOOTER
           ================================================== */}
@@ -1141,12 +1372,12 @@ export default function CommandCenter() {
           <footer className="mt-7 flex items-center justify-between px-1 text-[7px] font-bold tracking-[0.12em] text-slate-700">
 
             <span>
-              LOGISHIELD · NATIONAL LOGISTICS
+              LOGISHIELD Â· NATIONAL LOGISTICS
               COMMAND CENTER
             </span>
 
             <span>
-              MODEL: LOGISHIELD-DELAY-V2 ·{" "}
+              MODEL: LOGISHIELD-DELAY-V2 Â·{" "}
               {error
                 ? "API DISCONNECTED"
                 : "LIVE"}
@@ -1158,6 +1389,409 @@ export default function CommandCenter() {
 
       </main>
 
+    </div>
+  );
+}
+
+/* ============================================================
+   SHIPMENT ANALYSIS MODAL
+============================================================ */
+
+function ShipmentAnalysisModal({
+  shipment,
+  prediction,
+  recovery,
+  loading,
+  error,
+  onClose,
+}: {
+  shipment: HighRiskShipment;
+  prediction: PredictionData | null;
+  recovery: RecoveryData | null;
+  loading: boolean;
+  error: string;
+  onClose: () => void;
+}) {
+  const recommendation = recovery?.recommended_recovery;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-6 backdrop-blur-sm">
+      <div className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-2xl border border-cyan-300/10 bg-[#081018] shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/[0.07] bg-[#081018]/95 px-6 py-5 backdrop-blur-xl">
+          <div>
+            <div className="text-[8px] font-bold tracking-[0.2em] text-cyan-300/60">
+              LIVE SHIPMENT INTELLIGENCE
+            </div>
+            <h2 className="mt-2 text-lg font-semibold text-slate-100">
+              {shipment.shipment_code}
+            </h2>
+            <div className="mt-1 text-[8px] text-slate-600">
+              {shipment.source_city} â†’ {shipment.destination_city}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.07] text-slate-500 hover:text-white"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-6">
+          {loading && (
+            <div className="flex min-h-[300px] items-center justify-center">
+              <div className="flex items-center gap-3 text-[10px] text-cyan-300">
+                <RefreshCw size={15} className="animate-spin" />
+                Running V2 prediction and recovery engine...
+              </div>
+            </div>
+          )}
+
+          {error && !loading && (
+            <div className="rounded-xl border border-red-400/20 bg-red-400/[0.05] p-5 text-[10px] text-red-300">
+              {error}
+            </div>
+          )}
+
+          {!loading && !error && prediction && (
+            <>
+              <div className="grid grid-cols-4 gap-4">
+                <MetricCard
+                  icon={<ShieldAlert size={18} />}
+                  value={prediction.prediction.delay_probability_percentage}
+                  label="Delay probability %"
+                  description={prediction.prediction.risk_level}
+                  danger={prediction.prediction.risk_level === "CRITICAL"}
+                />
+                <MetricCard
+                  icon={<CloudRain size={18} />}
+                  value={prediction.conditions.weather_severity}
+                  label="Weather severity"
+                  description={prediction.conditions.weather}
+                />
+                <MetricCard
+                  icon={<Waves size={18} />}
+                  value={prediction.conditions.traffic_severity}
+                  label="Traffic severity"
+                  description={prediction.conditions.traffic}
+                />
+                <MetricCard
+                  icon={<Zap size={18} />}
+                  value={prediction.conditions.active_disruptions}
+                  label="Active disruptions"
+                  description="Current shipment exposure"
+                />
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-5">
+                <Panel title="ML Prediction">
+                  <InfoRow
+                    icon={<Gauge size={16} />}
+                    label="Probability"
+                    value={`${prediction.prediction.delay_probability_percentage.toFixed(2)}%`}
+                    suffix={prediction.prediction.predicted_delayed ? "Predicted delayed" : "Predicted on-time"}
+                  />
+                  <InfoRow
+                    icon={<ShieldAlert size={16} />}
+                    label="Risk level"
+                    value={prediction.prediction.risk_level}
+                    suffix="V2 classifier"
+                  />
+                  <InfoRow
+                    icon={<Route size={16} />}
+                    label="Route risk"
+                    value={prediction.conditions.route_risk}
+                    suffix="route score"
+                  />
+                  <InfoRow
+                    icon={<Truck size={16} />}
+                    label="Vehicle utilization"
+                    value={`${(prediction.conditions.vehicle_utilization * 100).toFixed(2)}%`}
+                    suffix="current shipment"
+                  />
+
+                  <div className="mt-5 space-y-2">
+                    {prediction.recommendations.map((item, index) => (
+                      <div
+                        key={`${item}-${index}`}
+                        className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-[9px] leading-5 text-slate-500"
+                      >
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+
+                <Panel title="Recovery Decision Engine">
+                  {recovery ? (
+                    <>
+                      <div className="rounded-xl border border-cyan-300/10 bg-cyan-300/[0.035] p-4">
+                        <div className="text-[8px] font-bold tracking-[0.15em] text-cyan-300/60">
+                          RECOMMENDED STRATEGY
+                        </div>
+                        <div className="mt-2 text-lg font-bold text-cyan-300">
+                          {recommendation?.strategy ?? "NO_ACTION"}
+                        </div>
+                        <div className="mt-2 text-[9px] leading-5 text-slate-500">
+                          {recommendation?.reason ??
+                            "No recovery recommendation returned."}
+                        </div>
+                      </div>
+
+                      <InfoRow
+                        icon={<ShieldAlert size={16} />}
+                        label="Intervention"
+                        value={recovery.risk?.intervention ?? "N/A"}
+                        suffix="recovery engine"
+                      />
+                      <InfoRow
+                        icon={<Route size={16} />}
+                        label="Operational risk"
+                        value={recovery.risk?.operational_risk ?? "N/A"}
+                        suffix="score"
+                      />
+                      <InfoRow
+                        icon={<Map size={16} />}
+                        label="Recovery options"
+                        value={recovery.option_count ?? 0}
+                        suffix="available options"
+                      />
+
+                      {recommendation && (
+                        <div className="mt-4 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <SmallValue label="Route" value={recommendation.route_code ?? "N/A"} />
+                            <SmallValue label="Vehicle" value={recommendation.vehicle_id != null ? `#${recommendation.vehicle_id}` : "N/A"} />
+                            <SmallValue label="Distance" value={formatNumber(recommendation.distance_km, " km")} />
+                            <SmallValue label="ETA" value={formatNumber(recommendation.estimated_time_hours, " h")} />
+                            <SmallValue label="Route risk" value={formatNumber(recommendation.route_risk)} />
+                            <SmallValue label="Recovery score" value={formatNumber(recommendation.recovery_score)} />
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-[9px] text-slate-600">No recovery result returned.</div>
+                  )}
+                </Panel>
+              </div>
+
+              {recovery && (
+                <RecoveryOptions
+                  recovery={recovery}
+                />
+              )}
+
+              {Array.isArray(recovery?.explanation) && recovery.explanation.length > 0 ? (
+                <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.015] p-5">
+                  <div className="text-[8px] font-bold tracking-[0.15em] text-slate-600">ENGINE EXPLANATION</div>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    {recovery.explanation.map((item, index) => (
+                      <div
+                        key={`${String(item)}-${index}`}
+                        className="rounded-lg border border-white/[0.05] bg-white/[0.02] px-4 py-3 text-[9px] text-slate-500"
+                      >
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatNumber(
+  value: number | null | undefined,
+  suffix = ""
+): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "N/A";
+  }
+
+  return `${value.toFixed(2)}${suffix}`;
+}
+
+function getRecoveryRoutes(
+  recovery: RecoveryData
+): RecoveryRoute[] {
+  const legacyRoutes = Array.isArray(recovery.alternative_routes)
+    ? recovery.alternative_routes
+    : [];
+
+  if (legacyRoutes.length > 0) {
+    return legacyRoutes;
+  }
+
+  const paths = Array.isArray(recovery.recovery_paths)
+    ? recovery.recovery_paths
+    : [];
+
+  const flattened: RecoveryRoute[] = [];
+
+  for (const path of paths) {
+    const nestedSegments = [
+      ...(Array.isArray(path.segments) ? path.segments : []),
+      ...(Array.isArray(path.route_segments) ? path.route_segments : []),
+    ];
+
+    if (nestedSegments.length > 0) {
+      flattened.push(...nestedSegments);
+      continue;
+    }
+
+    flattened.push({
+      route_id: path.route_id,
+      route_code:
+        path.route_code ??
+        (Array.isArray(path.route_codes)
+          ? path.route_codes.join(" â†’ ")
+          : null),
+      source_location_id: path.source_location_id,
+      destination_location_id: path.destination_location_id,
+      distance_km:
+        path.distance_km ??
+        path.total_distance_km ??
+        null,
+      estimated_time_hours:
+        path.estimated_time_hours ??
+        path.total_time_hours ??
+        null,
+      base_cost:
+        path.base_cost ??
+        path.total_cost ??
+        path.cost ??
+        null,
+      risk_score: path.risk_score,
+      recovery_score: path.recovery_score,
+      route_status: path.route_status ?? path.status,
+      status: path.status,
+    });
+  }
+
+  if (flattened.length > 0) {
+    return flattened;
+  }
+
+  return Array.isArray(recovery.route_segments)
+    ? recovery.route_segments
+    : [];
+}
+
+function RecoveryOptions({
+  recovery,
+}: {
+  recovery: RecoveryData;
+}) {
+  const routes = getRecoveryRoutes(recovery);
+  const vehicles = Array.isArray(recovery.alternative_vehicles)
+    ? recovery.alternative_vehicles
+    : [];
+
+  return (
+    <div className="mt-5 grid grid-cols-2 gap-5">
+      <Panel
+        title={
+          recovery.recovery_paths?.length
+            ? "Recovery Paths"
+            : "Alternative Routes"
+        }
+      >
+        {routes.length > 0 ? (
+          routes.slice(0, 5).map((route, index) => (
+            <div
+              key={`${route.route_id ?? route.route_code ?? "route"}-${index}`}
+              className="flex items-center justify-between border-b border-white/[0.05] py-3 last:border-0"
+            >
+              <div>
+                <div className="text-[9px] font-semibold text-slate-300">
+                  {route.route_code ?? `Route ${index + 1}`}
+                </div>
+                <div className="mt-1 text-[7px] text-slate-600">
+                  {formatNumber(route.distance_km, " km")} Â·{" "}
+                  {formatNumber(route.estimated_time_hours, " h")}
+                </div>
+              </div>
+
+              <div className="text-right">
+                <div className="text-[9px] font-bold text-cyan-300">
+                  {formatNumber(
+                    route.recovery_score ?? route.risk_score
+                  )}
+                </div>
+                <div className="text-[7px] text-slate-600">
+                  {route.recovery_score != null
+                    ? "recovery score"
+                    : "route score"}
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-lg border border-white/[0.05] bg-white/[0.02] px-4 py-4 text-[9px] text-slate-600">
+            No alternative recovery routes returned.
+          </div>
+        )}
+      </Panel>
+
+      <Panel title="Alternative Vehicles">
+        {vehicles.length > 0 ? (
+          vehicles.slice(0, 5).map((vehicle, index) => (
+            <div
+              key={`${vehicle.vehicle_id ?? "vehicle"}-${index}`}
+              className="flex items-center justify-between border-b border-white/[0.05] py-3 last:border-0"
+            >
+              <div>
+                <div className="text-[9px] font-semibold text-slate-300">
+                  {vehicle.vehicle_id != null
+                    ? `Vehicle #${vehicle.vehicle_id}`
+                    : "Vehicle"}
+                </div>
+                <div className="mt-1 text-[7px] text-slate-600">
+                  {vehicle.vehicle_type ?? "Unknown type"} Â·{" "}
+                  {typeof vehicle.capacity_kg === "number"
+                    ? `${numberFormat(vehicle.capacity_kg)} kg`
+                    : "Capacity N/A"}
+                </div>
+              </div>
+
+              <div className="text-right">
+                <div className="text-[9px] font-bold text-cyan-300">
+                  {formatNumber(vehicle.vehicle_score)}
+                </div>
+                <div className="text-[7px] text-slate-600">
+                  vehicle score
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-lg border border-white/[0.05] bg-white/[0.02] px-4 py-4 text-[9px] text-slate-600">
+            No alternative vehicles returned.
+          </div>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+function SmallValue({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <div className="text-[7px] font-bold tracking-[0.1em] text-slate-700">{label}</div>
+      <div className="mt-1 text-[10px] font-semibold text-slate-300">{value}</div>
     </div>
   );
 }

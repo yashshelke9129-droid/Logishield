@@ -16,9 +16,11 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { apiFetch } from "@/lib/api";
+
 /* ============================================================
    TYPES
-============================================================ */
+   ============================================================ */
 
 type OverallData = {
   total_shipments?: number;
@@ -102,13 +104,9 @@ type ForecastData = {
 
 /* ============================================================
    API
-============================================================ */
+   ============================================================ */
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "http://127.0.0.1:8000";
-
-const API_URL = `${API_BASE}/api/v1/forecasting`;
+const FORECASTING_PATH = "/api/v1/forecasting";
 
 /* ============================================================
    HELPERS
@@ -243,19 +241,9 @@ export default function ForecastingPage() {
 
         setError("");
 
-        const response = await fetch(API_URL, {
-          method: "GET",
-          cache: "no-store",
-        });
-
-        if (!response.ok) {
-          throw new Error(
-            `Forecasting API returned HTTP ${response.status}`
-          );
-        }
-
-        const result: ForecastData =
-          await response.json();
+        const result = await apiFetch<ForecastData>(
+          FORECASTING_PATH
+        );
 
         setData(result);
 

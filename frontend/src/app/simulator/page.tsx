@@ -1,6 +1,5 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -16,8 +15,9 @@ import {
   Zap,
 } from "lucide-react";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { apiFetch } from "@/lib/api";
 
 type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
@@ -138,8 +138,8 @@ export default function SimulatorPage() {
     setApiError("");
 
     try {
-      const response = await fetch(
-        `${API_BASE}/api/v1/simulator/scenario`,
+      const payload = await apiFetch<SimulationResponse>(
+        "/api/v1/simulator/scenario",
         {
           method: "POST",
           headers: {
@@ -153,17 +153,8 @@ export default function SimulatorPage() {
             weather_impact: weather / 100,
             route_exposure: route / 100,
           }),
-          cache: "no-store",
         }
       );
-
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          payload?.detail || "Simulation API request failed."
-        );
-      }
 
       setData(payload);
     } catch (error) {

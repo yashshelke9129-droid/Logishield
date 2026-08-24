@@ -27,17 +27,19 @@ import {
   type ReactNode,
 } from "react";
 
+import { apiFetch } from "@/lib/api";
+
 /* ============================================================
    CONFIGURATION
-============================================================ */
+   ============================================================ */
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "http://127.0.0.1:8000";
+// All API requests go through apiFetch() in @/lib/api, which
+// resolves NEXT_PUBLIC_API_URL (production) or the local
+// development server. No hard-coded URLs here.
 
 /* ============================================================
    TYPES
-============================================================ */
+   ============================================================ */
 
 type Shipment = {
   shipment_id?: number;
@@ -309,22 +311,9 @@ export default function RecoveryIntelligencePage() {
 
         setError("");
 
-        const response = await fetch(
-          `${API_BASE}/api/v1/recovery/shipment/${parsedId}`,
-          {
-            method: "GET",
-            cache: "no-store",
-          }
+        const json = await apiFetch<RecoveryResponse>(
+          `/api/v1/recovery/shipment/${parsedId}`
         );
-
-        if (!response.ok) {
-          throw new Error(
-            `Recovery API returned HTTP ${response.status}`
-          );
-        }
-
-        const json =
-          (await response.json()) as RecoveryResponse;
 
         setData(json);
       } catch (err) {

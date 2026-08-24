@@ -19,10 +19,10 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://127.0.0.1:8000";
+import {
+  ApiError,
+  apiFetch,
+} from "@/lib/api";
 
 type Shipment = {
   shipment_id: number;
@@ -196,20 +196,10 @@ export default function ShipmentsPage() {
     try {
       setError("");
 
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/shipments?limit=100`,
-        {
-          cache: "no-store",
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          `API returned ${response.status}`
-        );
-      }
-
-      const result = await response.json();
+      const result = await apiFetch<{
+        count: number;
+        shipments: Shipment[];
+      }>("/api/v1/shipments?limit=100");
 
       setShipments(
         Array.isArray(result.shipments)
@@ -223,7 +213,9 @@ export default function ShipmentsPage() {
       );
 
       setError(
-        "Unable to load shipment data from LogiShield API."
+        err instanceof ApiError
+          ? err.message
+          : "Unable to load shipment data from LogiShield API."
       );
     } finally {
       setLoading(false);
@@ -244,21 +236,9 @@ export default function ShipmentsPage() {
     setPredictionLoading(true);
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/predictions/shipment/${shipment.shipment_id}`,
-        {
-          cache: "no-store",
-        }
+      const result = await apiFetch<Prediction>(
+        `/api/v1/predictions/shipment/${shipment.shipment_id}`
       );
-
-      if (!response.ok) {
-        throw new Error(
-          `Prediction API returned ${response.status}`
-        );
-      }
-
-      const result =
-        await response.json();
 
       setPrediction(result);
     } catch (err) {
@@ -459,7 +439,10 @@ export default function ShipmentsPage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
+            {loading ||
+            (error &&
+              shipments.length === 0) ? null : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
               <MiniStat
                 icon={<Package size={16} />}
                 value={formatNumber(
@@ -492,7 +475,8 @@ export default function ShipmentsPage() {
                 )}
                 label="Disrupted"
               />
-            </div>
+              </div>
+            )}
           </div>
         </section>
 
@@ -660,6 +644,12 @@ export default function ShipmentsPage() {
 
           {loading ? (
             <LoadingState />
+          ) : error &&
+            shipments.length === 0 ? (
+            <ErrorState
+              message={error}
+              onRetry={loadShipments}
+            />
           ) : filteredShipments.length ===
             0 ? (
             <EmptyState
@@ -1391,7 +1381,7 @@ function LoadingState() {
 }
 
 /* ============================================================
-   EMPTY
+    EMPTY
    ============================================================ */
 
 function EmptyState({
@@ -1419,6 +1409,44 @@ function EmptyState({
           className="mt-5 rounded-lg border border-cyan-300/15 bg-cyan-300/5 px-4 py-2 text-[8px] font-bold text-cyan-300 hover:bg-cyan-300/10"
         >
           Clear filters
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+    API ERROR
+   ============================================================ */
+
+function ErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="flex min-h-[400px] items-center justify-center p-6">
+      <div className="max-w-md text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-red-400/20 bg-red-400/[0.05] text-red-300">
+          <AlertTriangle size={22} />
+        </div>
+
+        <div className="mt-5 text-sm font-semibold text-slate-200">
+          API / database connection error
+        </div>
+
+        <div className="mt-2 break-words text-[9px] leading-5 text-slate-500">
+          Shipment data could not be loaded from
+          the LogiShield API. {message}
+        </div>
+
+        <button
+          onClick={onRetry}
+          className="mt-5 rounded-lg border border-cyan-300/15 bg-cyan-300/5 px-4 py-2 text-[8px] font-bold text-cyan-300 hover:bg-cyan-300/10"
+        >
+          Retry connection
         </button>
       </div>
     </div>

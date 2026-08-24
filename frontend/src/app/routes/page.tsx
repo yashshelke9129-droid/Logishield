@@ -32,6 +32,11 @@ import {
   type ReactNode,
 } from "react";
 
+import {
+  ApiError,
+  apiFetch,
+} from "@/lib/api";
+
 /* ============================================================
    TYPES
 ============================================================ */
@@ -81,10 +86,6 @@ type Recommendation = {
   costDifference: number;
   reason: string;
 };
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "http://127.0.0.1:8000";
 
 /* ============================================================
    BASIC HELPERS
@@ -371,22 +372,9 @@ export default function RouteIntelligencePage() {
 
         setError("");
 
-        const response = await fetch(
-          `${API_BASE}/api/v1/routes?limit=120`,
-          {
-            method: "GET",
-            cache: "no-store",
-          }
+        const data = await apiFetch<RoutesResponse>(
+          "/api/v1/routes?limit=120"
         );
-
-        if (!response.ok) {
-          throw new Error(
-            `Route API returned HTTP ${response.status}`
-          );
-        }
-
-        const data: RoutesResponse =
-          await response.json();
 
         const loadedRoutes =
           Array.isArray(data.routes)
@@ -406,7 +394,7 @@ export default function RouteIntelligencePage() {
         );
 
         setError(
-          err instanceof Error
+          err instanceof ApiError
             ? err.message
             : "Unable to connect to Route Intelligence API."
         );
@@ -1015,7 +1003,9 @@ export default function RouteIntelligencePage() {
             icon={<RouteIcon size={20} />}
             label="Network Routes"
             value={
-              loading
+              loading ||
+              (error &&
+                routes.length === 0)
                 ? "—"
                 : formatNumber(
                     statistics.total
@@ -1029,7 +1019,9 @@ export default function RouteIntelligencePage() {
             icon={<CheckCircle2 size={20} />}
             label="Open Routes"
             value={
-              loading
+              loading ||
+              (error &&
+                routes.length === 0)
                 ? "—"
                 : formatNumber(
                     statistics.open
@@ -1043,7 +1035,9 @@ export default function RouteIntelligencePage() {
             icon={<Shield size={20} />}
             label="Average Route Risk"
             value={
-              loading
+              loading ||
+              (error &&
+                routes.length === 0)
                 ? "—"
                 : `${formatNumber(
                     statistics.averageRisk,
@@ -1053,8 +1047,9 @@ export default function RouteIntelligencePage() {
             caption="Network-wide route risk"
             iconClass="bg-orange-400/[0.08] text-orange-400"
             danger={
+              routes.length > 0 &&
               statistics.averageRisk >=
-              50
+                50
             }
           />
 
@@ -1062,7 +1057,9 @@ export default function RouteIntelligencePage() {
             icon={<MapPin size={20} />}
             label="Average Distance"
             value={
-              loading
+              loading ||
+              (error &&
+                routes.length === 0)
                 ? "—"
                 : `${formatNumber(
                     statistics.averageDistance,
@@ -1077,7 +1074,9 @@ export default function RouteIntelligencePage() {
             icon={<AlertTriangle size={20} />}
             label="Critical Routes"
             value={
-              loading
+              loading ||
+              (error &&
+                routes.length === 0)
                 ? "—"
                 : formatNumber(
                     statistics.critical
@@ -1086,6 +1085,7 @@ export default function RouteIntelligencePage() {
             caption="Immediate route attention"
             iconClass="bg-red-400/[0.08] text-red-400"
             danger={
+              routes.length > 0 &&
               statistics.critical > 0
             }
           />

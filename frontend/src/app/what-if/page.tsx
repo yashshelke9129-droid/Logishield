@@ -17,6 +17,8 @@ import {
 
 import { useEffect, useMemo, useState } from "react";
 
+import { apiFetch } from "@/lib/api";
+
 
 // ============================================================
 // TYPES
@@ -80,8 +82,10 @@ type DashboardData = {
 // CONSTANTS
 // ============================================================
 
-const API_BASE =
-  "http://127.0.0.1:8000/api/v1";
+// The live network baseline is loaded from the centralized
+// LogiShield API configuration (@/lib/api). When the API is
+// unreachable the page shows an explicit connection error and
+// NEVER substitutes hard-coded baseline numbers.
 
 
 // ============================================================
@@ -198,22 +202,10 @@ export default function WhatIfPage() {
 
       setApiError("");
 
-      const response =
-        await fetch(
-          `${API_BASE}/dashboard/overview`,
-          {
-            cache: "no-store",
-          }
-        );
-
-      if (!response.ok) {
-        throw new Error(
-          `HTTP ${response.status}`
-        );
-      }
-
       const data =
-        await response.json();
+        await apiFetch<DashboardData>(
+          "/api/v1/dashboard/overview"
+        );
 
       setDashboard(data);
 
@@ -224,8 +216,16 @@ export default function WhatIfPage() {
         error
       );
 
+      // Drop any previous baseline so the page never mixes
+      // stale data with a failed refresh, and never invents
+      // numbers when no data was ever loaded.
+
+      setDashboard(null);
+
       setApiError(
-        "Unable to connect to the LogiShield API. Simulation is using local scenario intelligence."
+        error instanceof Error
+          ? error.message
+          : "Unable to connect to the LogiShield API."
       );
 
     } finally {
@@ -263,59 +263,64 @@ export default function WhatIfPage() {
 
   // ----------------------------------------------------------
   // BASE DATA
+  //
+  // IMPORTANT:
+  // There are deliberately NO hard-coded fallback numbers
+  // here. When the baseline has not been loaded the page
+  // renders an explicit connection error instead of fake
+  // business data. Real zero values from the database remain
+  // perfectly valid.
   // ----------------------------------------------------------
+
+  const hasBaseline =
+    !apiError &&
+    dashboard !== null;
+
 
   const totalShipments =
     numberValue(
       dashboard?.overview
-        ?.total_shipments,
-      100000
+        ?.total_shipments
     );
 
 
   const delayedShipments =
     numberValue(
       dashboard?.overview
-        ?.delayed_shipments,
-      27248
+        ?.delayed_shipments
     );
 
 
   const baseDelay =
     numberValue(
       dashboard?.risk
-        ?.average_delay_probability_percentage,
-      42.88
+        ?.average_delay_probability_percentage
     );
 
 
   const baseCritical =
     numberValue(
       dashboard?.risk
-        ?.critical,
-      7224
+        ?.critical
     );
 
 
   const baseHigh =
     numberValue(
       dashboard?.risk
-        ?.high,
-      23076
+        ?.high
     );
 
 
   const routeCount =
     numberValue(
-      dashboard?.routes?.total,
-      120
+      dashboard?.routes?.total
     );
 
 
   const routeRisk =
     numberValue(
-      dashboard?.routes?.average_risk,
-      20.22
+      dashboard?.routes?.average_risk
     );
 
 
@@ -703,12 +708,34 @@ export default function WhatIfPage() {
 
           <div className="flex items-center gap-3">
 
-            <div className="hidden items-center gap-2 rounded-xl border border-cyan-400/10 bg-cyan-400/[0.03] px-4 py-2.5 sm:flex">
+            <div
+              className={`hidden items-center gap-2 rounded-xl px-4 py-2.5 sm:flex ${
+                apiError
+                  ? "border border-red-400/20 bg-red-400/[0.04]"
+                  : "border border-cyan-400/10 bg-cyan-400/[0.03]"
+              }`}
+            >
 
-              <span className="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.8)]" />
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  apiError
+                    ? "bg-red-400"
+                    : "bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.8)]"
+                }`}
+              />
 
-              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300">
-                SIMULATION ENGINE LIVE
+              <span
+                className={`text-[10px] font-bold uppercase tracking-[0.16em] ${
+                  apiError
+                    ? "text-red-300"
+                    : "text-cyan-300"
+                }`}
+              >
+                {apiError
+                  ? "BASELINE OFFLINE"
+                  : loading
+                  ? "SYNCING BASELINE"
+                  : "SIMULATION ENGINE LIVE"}
               </span>
 
             </div>
@@ -805,16 +832,49 @@ export default function WhatIfPage() {
 
         {apiError && (
 
-          <div className="mt-5 flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.04] px-5 py-4">
+          <div className="mt-5 flex flex-col justify-between gap-4 rounded-xl border border-red-400/25 bg-red-400/[0.05] px-5 py-4 sm:flex-row sm:items-center">
 
-            <AlertTriangle
-              size={18}
-              className="mt-0.5 shrink-0 text-amber-300"
-            />
+            <div className="flex items-start gap-3">
 
-            <p className="text-sm text-amber-200/80">
-              {apiError}
-            </p>
+              <AlertTriangle
+                size={18}
+                className="mt-0.5 shrink-0 text-red-300"
+              />
+
+              <div>
+
+                <p className="text-sm font-medium text-red-200">
+                  API / database connection error
+                </p>
+
+                <p className="mt-1 max-w-3xl text-xs leading-5 text-red-300/80">
+                  The What-if Simulator could not load the live
+                  network baseline from the LogiShield API.
+                  Scenario results are hidden instead of showing
+                  fabricated numbers. {apiError}
+                </p>
+
+              </div>
+
+            </div>
+
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={refreshing || loading}
+              className="flex shrink-0 items-center gap-2 rounded-lg border border-red-400/30 bg-red-400/[0.08] px-4 py-2 text-xs font-semibold text-red-200 transition hover:bg-red-400/[0.15] disabled:opacity-50"
+            >
+
+              <RefreshCw
+                size={14}
+                className={
+                  refreshing ? "animate-spin" : ""
+                }
+              />
+
+              Retry connection
+
+            </button>
 
           </div>
 
@@ -1147,10 +1207,17 @@ export default function WhatIfPage() {
 
           {/* =================================================
               RESULTS
+
+              Scenario numbers are only rendered from a live
+              API baseline. While loading a skeleton is shown;
+              if the API is unreachable an explicit connection
+              error replaces every simulated value.
           ================================================= */}
 
           <div className="space-y-6">
 
+            {hasBaseline ? (
+              <>
 
             {/* RESULT CARDS */}
 
@@ -1478,6 +1545,13 @@ export default function WhatIfPage() {
 
             </div>
 
+              </>
+            ) : (
+              <BaselineUnavailable
+                loading={loading}
+              />
+            )}
+
           </div>
 
         </section>
@@ -1511,6 +1585,8 @@ export default function WhatIfPage() {
                 <p className="text-xs text-slate-500">
                   {loading
                     ? "Loading live network baseline..."
+                    : !hasBaseline
+                    ? "Live network baseline unavailable - reconnect the API to simulate against real data."
                     : `${formatNumber(totalShipments)} shipments · ${routeCount} routes · ${formatPercent(baseDelay)} baseline delay probability`
                   }
                 </p>
@@ -1545,6 +1621,74 @@ export default function WhatIfPage() {
       </div>
 
     </main>
+
+  );
+
+}
+
+
+// ============================================================
+// BASELINE UNAVAILABLE
+//
+// Rendered instead of scenario results when the live network
+// baseline could not be loaded. Guarantees the simulator
+// never presents fabricated numbers as business data.
+// ============================================================
+
+function BaselineUnavailable({
+  loading,
+}: {
+  loading: boolean;
+}) {
+
+  if (loading) {
+
+    return (
+
+      <div className="space-y-4">
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+
+          {Array.from({ length: 4 }).map(
+            (_, index) => (
+              <div
+                key={index}
+                className="h-[132px] animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.02]"
+              />
+            )
+          )}
+
+        </div>
+
+        <div className="h-[220px] animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.015]" />
+
+      </div>
+
+    );
+
+  }
+
+  return (
+
+    <div className="rounded-2xl border border-dashed border-red-400/25 bg-red-400/[0.03] p-10 text-center">
+
+      <ShieldAlert
+        size={26}
+        className="mx-auto text-red-300"
+      />
+
+      <p className="mt-4 text-sm font-semibold text-red-200">
+        Live network baseline unavailable
+      </p>
+
+      <p className="mx-auto mt-2 max-w-md text-xs leading-5 text-slate-500">
+        The What-if Simulator projects impact against the real
+        PostgreSQL-backed LogiShield network. Scenario controls stay
+        interactive, but projected results are hidden until the API
+        connection is restored.
+      </p>
+
+    </div>
 
   );
 

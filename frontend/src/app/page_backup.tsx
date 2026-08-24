@@ -20,9 +20,10 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://127.0.0.1:8000";
+import {
+  ApiError,
+  apiFetch,
+} from "@/lib/api";
 
 type RiskData = {
   critical: number;
@@ -353,22 +354,9 @@ export default function CommandCenter() {
 
         setError("");
 
-        const response = await fetch(
-          `${API_BASE_URL}/api/v1/dashboard/overview`,
-          {
-            method: "GET",
-            cache: "no-store",
-          }
+        const result = await apiFetch<OverviewData>(
+          "/api/v1/dashboard/overview"
         );
-
-        if (!response.ok) {
-          throw new Error(
-            `Dashboard API returned ${response.status}`
-          );
-        }
-
-        const result =
-          (await response.json()) as OverviewData;
 
         setData(result);
       } catch (err) {
@@ -487,41 +475,23 @@ export default function CommandCenter() {
       setAnalysisLoading(true);
 
       try {
-        const [predictionResponse, recoveryResponse] =
+        const [predictionJson, recoveryJson] =
           await Promise.all([
-            fetch(
-              `${API_BASE_URL}/api/v1/predictions/shipment/${shipment.shipment_id}`,
-              { cache: "no-store" }
+            apiFetch<PredictionData>(
+              `/api/v1/predictions/shipment/${shipment.shipment_id}`
             ),
-            fetch(
-              `${API_BASE_URL}/api/v1/recovery/shipment/${shipment.shipment_id}`,
-              { cache: "no-store" }
+            apiFetch<RecoveryData>(
+              `/api/v1/recovery/shipment/${shipment.shipment_id}`
             ),
           ]);
 
-        const predictionJson = await predictionResponse.json();
-        if (!predictionResponse.ok) {
-          throw new Error(
-            predictionJson?.detail ||
-              `Prediction API returned ${predictionResponse.status}`
-          );
-        }
+        setPrediction(predictionJson);
 
-        setPrediction(predictionJson as PredictionData);
-
-        const recoveryJson = await recoveryResponse.json();
-        if (!recoveryResponse.ok) {
-          throw new Error(
-            recoveryJson?.detail ||
-              `Recovery API returned ${recoveryResponse.status}`
-          );
-        }
-
-        setRecoveryAnalysis(recoveryJson as RecoveryData);
+        setRecoveryAnalysis(recoveryJson);
       } catch (err) {
         console.error("Shipment analysis error:", err);
         setAnalysisError(
-          err instanceof Error
+          err instanceof ApiError
             ? err.message
             : "Unable to load shipment intelligence."
         );

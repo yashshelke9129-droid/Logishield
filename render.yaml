@@ -1,0 +1,61 @@
+# ============================================================
+# LogiShield - Render Blueprint
+# ============================================================
+#
+# Deploy the FastAPI backend as a Render Web Service.
+# The service is launched from the repository root so the
+# `backend.*` package imports resolve correctly.
+#
+# Secrets (DB_PASSWORD etc.) are intentionally declared with
+# sync: false - set them in the Render dashboard, never in
+# this file.
+
+services:
+  - type: web
+    name: logishield-api
+    runtime: python
+    # Root directory: repository root ("/").
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13"
+
+      # ------------------------------------------------------
+      # PostgreSQL (set real values in the Render dashboard)
+      # ------------------------------------------------------
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+
+      # Optional: full connection string instead of the
+      # individual DB_* variables. Render internal URLs look
+      # like postgresql://user:pass@dpg-xxxx/db
+      # - key: DATABASE_URL
+      #   sync: false
+
+      # Managed PostgreSQL requires SSL for external
+      # connections. Use "disable" only for local databases.
+      - key: DB_SSLMODE
+        value: require
+
+      # ------------------------------------------------------
+      # CORS
+      #
+      # Comma separated list of extra browser origins allowed
+      # to call the API. The Vercel production origin below and
+      # the localhost development origins are always allowed by
+      # backend/main.py even if this variable is empty.
+      # ------------------------------------------------------
+      - key: CORS_ORIGINS
+        value: https://logishield-eta.vercel.app

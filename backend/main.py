@@ -24,6 +24,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote_plus
 
 import numpy as np
 import pandas as pd
@@ -66,6 +67,10 @@ ENV_FILE = BACKEND_DIR / ".env"
 # ============================================================
 # ENVIRONMENT
 # ============================================================
+#
+# Local development loads backend/.env (never committed).
+# Production (Render) injects the same variables through the
+# Render dashboard, which always wins over any .env file.
 
 load_dotenv(ENV_FILE)
 
@@ -93,31 +98,75 @@ DB_PASSWORD = os.getenv(
     "DB_PASSWORD"
 )
 
+DB_SSLMODE = os.getenv(
+    "DB_SSLMODE",
+    ""
+).strip()
+
+DATABASE_URL_ENV = os.getenv(
+    "DATABASE_URL",
+    ""
+).strip()
+
+LOCAL_DB_HOSTS = {
+    "localhost",
+    "127.0.0.1",
+    "::1"
+}
+
 
 # ============================================================
 # DATABASE
 # ============================================================
 
-if not DB_PASSWORD:
-    raise RuntimeError(
-        f"DB_PASSWORD not found in {ENV_FILE}"
+if DATABASE_URL_ENV:
+
+    # Full connection string supplied (Render internal or
+    # external connection strings work here).
+
+    DATABASE_URL = DATABASE_URL_ENV
+
+else:
+
+    if not DB_PASSWORD:
+        raise RuntimeError(
+            "Database credentials are not configured. "
+            "Set DB_HOST, DB_PORT, DB_NAME, DB_USER and "
+            "DB_PASSWORD (or a full DATABASE_URL) as "
+            "environment variables - locally in "
+            f"{ENV_FILE}, in production via the "
+            "Render dashboard."
+        )
+
+    DATABASE_URL = (
+        "postgresql+psycopg2://"
+        f"{quote_plus(DB_USER)}:"
+        f"{quote_plus(DB_PASSWORD)}@"
+        f"{DB_HOST}:"
+        f"{DB_PORT}/"
+        f"{DB_NAME}"
     )
 
+# SSL: managed PostgreSQL providers such as Render require
+# SSL for external connections. Localhost databases usually
+# do not use SSL. Override with the DB_SSLMODE variable
+# (disable | allow | prefer | require).
 
-DATABASE_URL = (
-    "postgresql+psycopg2://"
-    f"{DB_USER}:"
-    f"{DB_PASSWORD}@"
-    f"{DB_HOST}:"
-    f"{DB_PORT}/"
-    f"{DB_NAME}"
-)
+if not DB_SSLMODE:
+
+    DB_SSLMODE = (
+        "disable"
+        if DB_HOST in LOCAL_DB_HOSTS
+        else "require"
+    )
 
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     pool_size=5,
-    max_overflow=10
+    max_overflow=10,
+    pool_recycle=1800,
+    connect_args={"sslmode": DB_SSLMODE}
 )
 
 
@@ -247,10 +296,26 @@ app = FastAPI(
 # ============================================================
 # CORS
 # ============================================================
+#
+# Configure additional production origins through the
+# CORS_ORIGINS environment variable (comma separated).
+# Local development origins are always allowed so the
+# Next.js dev server keeps working out of the box.
+
+DEFAULT_CORS_ORIGINS = [
+    "https://logishield-eta.vercel.app",
+]
+
+LOCAL_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
 
 cors_origins_raw = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
+    ""
 )
 
 cors_origins = [
@@ -259,16 +324,12 @@ cors_origins = [
     if origin.strip()
 ]
 
-# Always allow local development.
-cors_origins.extend([
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-])
-
 # Remove duplicates while preserving order.
-cors_origins = list(dict.fromkeys(cors_origins))
+cors_origins = list(dict.fromkeys(
+    DEFAULT_CORS_ORIGINS
+    + cors_origins
+    + LOCAL_CORS_ORIGINS
+))
 
 app.add_middleware(
     CORSMiddleware,
@@ -397,6 +458,14 @@ def root():
 
 @app.get("/health")
 def health():
+    """
+    Liveness + readiness probe.
+
+    The HTTP status stays 200 while the API process is up
+    (so the Render health check does not restart the service
+    during transient database cold starts). The response body
+    always reports the real database connectivity status.
+    """
 
     database_status = "unknown"
 
@@ -410,15 +479,24 @@ def health():
 
         database_status = "connected"
 
-    except Exception:
+    except Exception as error:
 
         database_status = "disconnected"
 
+        print(f"Health check database error: {error}")
+
     return {
-        "status": "healthy",
+        "status": (
+            "healthy"
+            if database_status == "connected"
+            else "degraded"
+        ),
         "database": database_status,
         "model_loaded": model is not None,
-        "model_runtime": MODEL_RUNTIME
+        "model_runtime": MODEL_RUNTIME,
+        "timestamp":
+            datetime.utcnow().isoformat()
+            + "Z"
     }
 
 

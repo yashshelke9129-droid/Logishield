@@ -19,10 +19,11 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://127.0.0.1:8000";
+import {
+  ApiError,
+  apiFetch,
+  API_BASE_URL,
+} from "@/lib/api";
 
 type RiskData = {
   critical: number;
@@ -352,22 +353,9 @@ export default function CommandCenter() {
 
         setError("");
 
-        const response = await fetch(
-          `${API_BASE_URL}/api/v1/dashboard/overview`,
-          {
-            method: "GET",
-            cache: "no-store",
-          }
+        const result = await apiFetch<OverviewData>(
+          "/api/v1/dashboard/overview"
         );
-
-        if (!response.ok) {
-          throw new Error(
-            `Dashboard API returned ${response.status}`
-          );
-        }
-
-        const result =
-          (await response.json()) as OverviewData;
 
         setData(result);
       } catch (err) {
@@ -377,7 +365,9 @@ export default function CommandCenter() {
         );
 
         setError(
-          "Unable to connect to the LogiShield API."
+          err instanceof ApiError
+            ? err.message
+            : "Unable to connect to the LogiShield API."
         );
       } finally {
         setLoading(false);
@@ -486,37 +476,19 @@ export default function CommandCenter() {
       setAnalysisLoading(true);
 
       try {
-        const [predictionResponse, recoveryResponse] =
+        const [predictionJson, recoveryJson] =
           await Promise.all([
-            fetch(
-              `${API_BASE_URL}/api/v1/predictions/shipment/${shipment.shipment_id}`,
-              { cache: "no-store" }
+            apiFetch<PredictionData>(
+              `/api/v1/predictions/shipment/${shipment.shipment_id}`
             ),
-            fetch(
-              `${API_BASE_URL}/api/v1/recovery/shipment/${shipment.shipment_id}`,
-              { cache: "no-store" }
+            apiFetch<RecoveryData>(
+              `/api/v1/recovery/shipment/${shipment.shipment_id}`
             ),
           ]);
 
-        const predictionJson = await predictionResponse.json();
-        if (!predictionResponse.ok) {
-          throw new Error(
-            predictionJson?.detail ||
-              `Prediction API returned ${predictionResponse.status}`
-          );
-        }
+        setPrediction(predictionJson);
 
-        setPrediction(predictionJson as PredictionData);
-
-        const recoveryJson = await recoveryResponse.json();
-        if (!recoveryResponse.ok) {
-          throw new Error(
-            recoveryJson?.detail ||
-              `Recovery API returned ${recoveryResponse.status}`
-          );
-        }
-
-        setRecoveryAnalysis(recoveryJson as RecoveryData);
+        setRecoveryAnalysis(recoveryJson);
       } catch (err) {
         console.error("Shipment analysis error:", err);
         setAnalysisError(
@@ -745,7 +717,7 @@ export default function CommandCenter() {
                   <div className="absolute inset-2 rounded-full border border-cyan-300/[0.04]" />
 
                   <span className="text-xl font-bold text-cyan-300">
-                    {loading
+                    {!data
                       ? "--"
                       : `${Math.round(
                           healthScore
@@ -780,11 +752,73 @@ export default function CommandCenter() {
               ERROR
           ================================================== */}
 
-          {error && (
-            <div className="mt-4 rounded-xl border border-red-400/20 bg-red-400/[0.05] px-5 py-4 text-[10px] text-red-300">
-              {error}
+          {/* ==================================================
+              API CONNECTION STATUS
+
+              - loading && no data  -> skeleton
+              - error && no data    -> explicit connection error
+                                      (never fake zero values)
+              - error && stale data -> keep last good data and
+                                      show a stale warning
+          ================================================== */}
+
+          {error && !data && (
+            <div className="mt-4 rounded-xl border border-red-400/25 bg-red-400/[0.06] px-6 py-6">
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                <div className="flex items-start gap-3">
+                  <ShieldAlert
+                    size={20}
+                    className="mt-0.5 shrink-0 text-red-300"
+                  />
+
+                  <div>
+                    <div className="text-[11px] font-bold text-red-200">
+                      API / database connection error
+                    </div>
+
+                    <div className="mt-2 max-w-3xl text-[10px] leading-5 text-red-300/80">
+                      The Command Center could not load live data from the
+                      LogiShield API ({API_BASE_URL}). Metrics are hidden
+                      instead of showing misleading zeros. {error}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    loadDashboard(true)
+                  }
+                  disabled={refreshing}
+                  className="flex shrink-0 items-center gap-2 rounded-lg border border-red-400/30 bg-red-400/[0.08] px-4 py-2 text-[10px] font-bold text-red-200 transition hover:bg-red-400/[0.15] disabled:opacity-50"
+                >
+                  <RefreshCw
+                    size={13}
+                    className={
+                      refreshing
+                        ? "animate-spin"
+                        : ""
+                    }
+                  />
+                  Retry connection
+                </button>
+              </div>
             </div>
           )}
+
+          {error && data && (
+            <div className="mt-4 rounded-xl border border-yellow-300/20 bg-yellow-300/[0.05] px-5 py-4 text-[10px] text-yellow-200">
+              Live refresh failed - showing the last
+              successfully loaded data. {error}
+            </div>
+          )}
+
+          {loading && !data && (
+            <DashboardSkeleton />
+          )}
+
+          {!loading && !(error && !data) && (
+            <>
 
           {/* ==================================================
               KPI CARDS
@@ -1353,6 +1387,9 @@ export default function CommandCenter() {
 
           </section>
 
+            </>
+          )}
+
           {selectedShipment && (
             <ShipmentAnalysisModal
               shipment={selectedShipment}
@@ -1388,6 +1425,34 @@ export default function CommandCenter() {
 
       </main>
 
+    </div>
+  );
+}
+
+/* ============================================================
+   DASHBOARD SKELETON
+   Shown while the first API load is in flight.
+============================================================ */
+
+function DashboardSkeleton() {
+  return (
+    <div className="mt-5 space-y-5">
+      <div className="grid grid-cols-5 gap-4">
+        {Array.from({ length: 5 }).map(
+          (_, index) => (
+            <div
+              key={index}
+              className="h-[118px] animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.02]"
+            />
+          )
+        )}
+      </div>
+
+      <div className="grid grid-cols-[minmax(0,1.65fr)_minmax(340px,1fr)] gap-5">
+        <div className="h-[400px] animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.015]" />
+
+        <div className="h-[400px] animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.015]" />
+      </div>
     </div>
   );
 }

@@ -13,10 +13,10 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://127.0.0.1:8000";
+import {
+  ApiError,
+  apiFetch,
+} from "@/lib/api";
 
 type DisruptionType = {
   disruption_type: string;
@@ -127,21 +127,9 @@ export default function DisruptionsPage() {
 
       setError("");
 
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/dashboard/overview`,
-        {
-          cache: "no-store",
-        }
+      const result = await apiFetch<DashboardResponse>(
+        "/api/v1/dashboard/overview"
       );
-
-      if (!response.ok) {
-        throw new Error(
-          `API returned ${response.status}`
-        );
-      }
-
-      const result =
-        await response.json();
 
       setData(result);
     } catch (err) {
@@ -151,7 +139,9 @@ export default function DisruptionsPage() {
       );
 
       setError(
-        "Unable to load live disruption data."
+        err instanceof ApiError
+          ? err.message
+          : "Unable to load live disruption data."
       );
     } finally {
       setLoading(false);
@@ -341,6 +331,7 @@ export default function DisruptionsPage() {
             STAT CARDS
         =================================================== */}
 
+        {!loading && !(error && !data) && (
         <section className="mt-5 grid grid-cols-4 gap-4">
 
           <DisruptionMetric
@@ -382,17 +373,83 @@ export default function DisruptionsPage() {
           />
 
         </section>
+        )}
 
         {/* ===================================================
-            ERROR
+            API CONNECTION STATUS
+
+            - loading && no data  -> skeleton
+            - error && no data    -> explicit connection error
+                                    (never fake zero values)
+            - error && stale data -> keep last good data
         =================================================== */}
 
-        {error && (
-          <div className="mt-5 rounded-xl border border-red-400/20 bg-red-400/[0.05] p-4 text-xs text-red-300">
-            {error}
+        {error && !data && (
+          <div className="mt-5 rounded-xl border border-red-400/25 bg-red-400/[0.06] p-5">
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+              <div className="flex items-start gap-3">
+                <ShieldAlert
+                  size={20}
+                  className="mt-0.5 shrink-0 text-red-300"
+                />
+
+                <div>
+                  <div className="text-xs font-bold text-red-200">
+                    API / database connection error
+                  </div>
+
+                  <div className="mt-2 max-w-3xl text-[10px] leading-5 text-red-300/80">
+                    Live disruption data could not be loaded from the
+                    LogiShield API. Metrics are hidden instead of showing
+                    misleading zeros. {error}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  loadDisruptions(true)
+                }
+                disabled={refreshing}
+                className="flex shrink-0 items-center gap-2 rounded-lg border border-red-400/30 bg-red-400/[0.08] px-4 py-2 text-[10px] font-bold text-red-200 transition hover:bg-red-400/[0.15] disabled:opacity-50"
+              >
+                <RefreshCw
+                  size={13}
+                  className={
+                    refreshing
+                      ? "animate-spin"
+                      : ""
+                  }
+                />
+                Retry connection
+              </button>
+            </div>
           </div>
         )}
 
+        {error && data && (
+          <div className="mt-5 rounded-xl border border-yellow-300/20 bg-yellow-300/[0.05] p-4 text-xs text-yellow-200">
+            Live refresh failed - showing the last
+            successfully loaded data. {error}
+          </div>
+        )}
+
+        {loading && !data && (
+          <div className="mt-5 grid grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map(
+              (_, index) => (
+                <div
+                  key={index}
+                  className="h-[150px] animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.02]"
+                />
+              )
+            )}
+          </div>
+        )}
+
+        {!loading && !(error && !data) && (
+          <>
         {/* ===================================================
             MAIN ANALYTICS
         =================================================== */}
@@ -686,6 +743,8 @@ export default function DisruptionsPage() {
           </div>
 
         </section>
+          </>
+        )}
 
         {/* ===================================================
             FOOTER

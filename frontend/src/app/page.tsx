@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import {
@@ -19,10 +19,10 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
+
 import {
   ApiError,
   apiFetch,
-  API_BASE_URL,
 } from "@/lib/api";
 
 type RiskData = {
@@ -152,6 +152,7 @@ type RecoveryVehicle = {
 };
 
 type RecoveryPath = {
+  base_cost?: number | null;
   path_id?: string | number | null;
   route_id?: number | null;
   route_code?: string | null;
@@ -365,9 +366,7 @@ export default function CommandCenter() {
         );
 
         setError(
-          err instanceof ApiError
-            ? err.message
-            : "Unable to connect to the LogiShield API."
+          "Unable to connect to the LogiShield API."
         );
       } finally {
         setLoading(false);
@@ -492,7 +491,7 @@ export default function CommandCenter() {
       } catch (err) {
         console.error("Shipment analysis error:", err);
         setAnalysisError(
-          err instanceof Error
+          err instanceof ApiError
             ? err.message
             : "Unable to load shipment intelligence."
         );
@@ -717,7 +716,7 @@ export default function CommandCenter() {
                   <div className="absolute inset-2 rounded-full border border-cyan-300/[0.04]" />
 
                   <span className="text-xl font-bold text-cyan-300">
-                    {!data
+                    {loading
                       ? "--"
                       : `${Math.round(
                           healthScore
@@ -752,73 +751,11 @@ export default function CommandCenter() {
               ERROR
           ================================================== */}
 
-          {/* ==================================================
-              API CONNECTION STATUS
-
-              - loading && no data  -> skeleton
-              - error && no data    -> explicit connection error
-                                      (never fake zero values)
-              - error && stale data -> keep last good data and
-                                      show a stale warning
-          ================================================== */}
-
-          {error && !data && (
-            <div className="mt-4 rounded-xl border border-red-400/25 bg-red-400/[0.06] px-6 py-6">
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                <div className="flex items-start gap-3">
-                  <ShieldAlert
-                    size={20}
-                    className="mt-0.5 shrink-0 text-red-300"
-                  />
-
-                  <div>
-                    <div className="text-[11px] font-bold text-red-200">
-                      API / database connection error
-                    </div>
-
-                    <div className="mt-2 max-w-3xl text-[10px] leading-5 text-red-300/80">
-                      The Command Center could not load live data from the
-                      LogiShield API ({API_BASE_URL}). Metrics are hidden
-                      instead of showing misleading zeros. {error}
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    loadDashboard(true)
-                  }
-                  disabled={refreshing}
-                  className="flex shrink-0 items-center gap-2 rounded-lg border border-red-400/30 bg-red-400/[0.08] px-4 py-2 text-[10px] font-bold text-red-200 transition hover:bg-red-400/[0.15] disabled:opacity-50"
-                >
-                  <RefreshCw
-                    size={13}
-                    className={
-                      refreshing
-                        ? "animate-spin"
-                        : ""
-                    }
-                  />
-                  Retry connection
-                </button>
-              </div>
+          {error && (
+            <div className="mt-4 rounded-xl border border-red-400/20 bg-red-400/[0.05] px-5 py-4 text-[10px] text-red-300">
+              {error}
             </div>
           )}
-
-          {error && data && (
-            <div className="mt-4 rounded-xl border border-yellow-300/20 bg-yellow-300/[0.05] px-5 py-4 text-[10px] text-yellow-200">
-              Live refresh failed - showing the last
-              successfully loaded data. {error}
-            </div>
-          )}
-
-          {loading && !data && (
-            <DashboardSkeleton />
-          )}
-
-          {!loading && !(error && !data) && (
-            <>
 
           {/* ==================================================
               KPI CARDS
@@ -848,7 +785,7 @@ export default function CommandCenter() {
                 risk.high
               }
               label="At-risk shipments"
-              description="Delay probability ≥ 50%"
+              description="Delay probability â‰¥ 50%"
             />
 
             <MetricCard
@@ -859,7 +796,7 @@ export default function CommandCenter() {
               }
               value={risk.critical}
               label="Critical shipments"
-              description="Delay probability ≥ 75%"
+              description="Delay probability â‰¥ 75%"
               danger
             />
 
@@ -878,7 +815,7 @@ export default function CommandCenter() {
               }
               value={vehicles.total}
               label="Vehicles in network"
-              description={`${vehicles.active} active · ${vehicles.available} available`}
+              description={`${vehicles.active} active Â· ${vehicles.available} available`}
             />
 
           </section>
@@ -1387,9 +1324,6 @@ export default function CommandCenter() {
 
           </section>
 
-            </>
-          )}
-
           {selectedShipment && (
             <ShipmentAnalysisModal
               shipment={selectedShipment}
@@ -1408,12 +1342,12 @@ export default function CommandCenter() {
           <footer className="mt-7 flex items-center justify-between px-1 text-[7px] font-bold tracking-[0.12em] text-slate-700">
 
             <span>
-              LOGISHIELD · NATIONAL LOGISTICS
+              LOGISHIELD Â· NATIONAL LOGISTICS
               COMMAND CENTER
             </span>
 
             <span>
-              MODEL: LOGISHIELD-DELAY-V2 ·{" "}
+              MODEL: LOGISHIELD-DELAY-V2 Â·{" "}
               {error
                 ? "API DISCONNECTED"
                 : "LIVE"}
@@ -1425,34 +1359,6 @@ export default function CommandCenter() {
 
       </main>
 
-    </div>
-  );
-}
-
-/* ============================================================
-   DASHBOARD SKELETON
-   Shown while the first API load is in flight.
-============================================================ */
-
-function DashboardSkeleton() {
-  return (
-    <div className="mt-5 space-y-5">
-      <div className="grid grid-cols-5 gap-4">
-        {Array.from({ length: 5 }).map(
-          (_, index) => (
-            <div
-              key={index}
-              className="h-[118px] animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.02]"
-            />
-          )
-        )}
-      </div>
-
-      <div className="grid grid-cols-[minmax(0,1.65fr)_minmax(340px,1fr)] gap-5">
-        <div className="h-[400px] animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.015]" />
-
-        <div className="h-[400px] animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.015]" />
-      </div>
     </div>
   );
 }
@@ -1490,7 +1396,7 @@ function ShipmentAnalysisModal({
               {shipment.shipment_code}
             </h2>
             <div className="mt-1 text-[8px] text-slate-600">
-              {shipment.source_city} → {shipment.destination_city}
+              {shipment.source_city} â†’ {shipment.destination_city}
             </div>
           </div>
 
@@ -1715,7 +1621,7 @@ function getRecoveryRoutes(
       route_code:
         path.route_code ??
         (Array.isArray(path.route_codes)
-          ? path.route_codes.join(" → ")
+          ? path.route_codes.join(" â†’ ")
           : null),
       source_location_id: path.source_location_id,
       destination_location_id: path.destination_location_id,
@@ -1778,7 +1684,7 @@ function RecoveryOptions({
                   {route.route_code ?? `Route ${index + 1}`}
                 </div>
                 <div className="mt-1 text-[7px] text-slate-600">
-                  {formatNumber(route.distance_km, " km")} ·{" "}
+                  {formatNumber(route.distance_km, " km")} Â·{" "}
                   {formatNumber(route.estimated_time_hours, " h")}
                 </div>
               </div>
@@ -1818,7 +1724,7 @@ function RecoveryOptions({
                     : "Vehicle"}
                 </div>
                 <div className="mt-1 text-[7px] text-slate-600">
-                  {vehicle.vehicle_type ?? "Unknown type"} ·{" "}
+                  {vehicle.vehicle_type ?? "Unknown type"} Â·{" "}
                   {typeof vehicle.capacity_kg === "number"
                     ? `${numberFormat(vehicle.capacity_kg)} kg`
                     : "Capacity N/A"}

@@ -71,12 +71,15 @@ type FastApiErrorBody = {
 
 function extractDetail(body: unknown): string | null {
   if (
-    body &&
+    body !== null &&
     typeof body === "object" &&
-    "detail" in body &&
-    typeof (body as FastApiErrorBody).detail === "string"
+    "detail" in body
   ) {
-    return (body as FastApiErrorBody).detail;
+    const detail = (body as FastApiErrorBody).detail;
+
+    if (typeof detail === "string") {
+      return detail;
+    }
   }
 
   return null;

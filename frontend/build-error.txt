@@ -1,0 +1,16 @@
+
+> frontend@0.1.0 build
+> next build
+
+▲ Next.js 16.3.1 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.ts took 40ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 2.5s
+  Running TypeScript ...
+LogiShield_CommandCenter_page_CORRECTED.tsx(1666,14): error TS2339: Property 'base_cost' does not exist on type 'RecoveryPath'.
+src/app/page.tsx(1731,14): error TS2339: Property 'base_cost' does not exist on type 'RecoveryPath'.
+src/lib/api.ts(79,5): error TS2322: Type 'unknown' is not assignable to type 'string | null'.
+Failed to type check.
+

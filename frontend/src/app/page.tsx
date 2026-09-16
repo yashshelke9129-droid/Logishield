@@ -206,11 +206,9 @@ type RecoveryData = {
 
   current_route?: RecoveryRoute | null;
 
-  // Current Recovery Engine response.
   recovery_paths?: RecoveryPath[];
   route_segments?: RecoveryRoute[];
 
-  // Kept for backward compatibility with the older response.
   alternative_routes?: RecoveryRoute[];
 
   alternative_vehicles?: RecoveryVehicle[];
@@ -457,12 +455,16 @@ export default function CommandCenter() {
 
   const [selectedShipment, setSelectedShipment] =
     useState<HighRiskShipment | null>(null);
+
   const [prediction, setPrediction] =
     useState<PredictionData | null>(null);
+
   const [recoveryAnalysis, setRecoveryAnalysis] =
     useState<RecoveryData | null>(null);
+
   const [analysisLoading, setAnalysisLoading] =
     useState(false);
+
   const [analysisError, setAnalysisError] =
     useState("");
 
@@ -490,6 +492,7 @@ export default function CommandCenter() {
         setRecoveryAnalysis(recoveryJson);
       } catch (err) {
         console.error("Shipment analysis error:", err);
+
         setAnalysisError(
           err instanceof ApiError
             ? err.message
@@ -618,6 +621,11 @@ export default function CommandCenter() {
             <h1 className="mt-2 text-xl font-medium tracking-tight text-slate-100">
               Command Center
             </h1>
+
+            {/* YASH SHELKE BRANDING */}
+            <div className="mt-1 text-[7px] font-semibold tracking-[0.14em] text-cyan-300/70">
+              DEVELOPED BY YASH SHELKE
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -663,8 +671,12 @@ export default function CommandCenter() {
               />
             </button>
 
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-cyan-300 text-[9px] font-black text-[#061015]">
-              LS
+            {/* UPDATED INITIALS */}
+            <div
+              title="Yash Shelke"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-cyan-300 text-[9px] font-black text-[#061015]"
+            >
+              YS
             </div>
 
           </div>
@@ -704,6 +716,10 @@ export default function CommandCenter() {
                   the live PostgreSQL-backed
                   LogiShield API.
                 </p>
+
+                <div className="mt-4 text-[8px] font-semibold tracking-[0.12em] text-cyan-300/60">
+                  DEVELOPED BY YASH SHELKE
+                </div>
 
               </div>
 
@@ -785,7 +801,7 @@ export default function CommandCenter() {
                 risk.high
               }
               label="At-risk shipments"
-              description="Delay probability â‰¥ 50%"
+              description="Delay probability ≥ 50%"
             />
 
             <MetricCard
@@ -796,7 +812,7 @@ export default function CommandCenter() {
               }
               value={risk.critical}
               label="Critical shipments"
-              description="Delay probability â‰¥ 75%"
+              description="Delay probability ≥ 75%"
               danger
             />
 
@@ -815,7 +831,7 @@ export default function CommandCenter() {
               }
               value={vehicles.total}
               label="Vehicles in network"
-              description={`${vehicles.active} active Â· ${vehicles.available} available`}
+              description={`${vehicles.active} active · ${vehicles.available} available`}
             />
 
           </section>
@@ -1022,11 +1038,8 @@ export default function CommandCenter() {
 
           <section className="mt-5 grid grid-cols-3 gap-5">
 
-            {/* =================================================
-                SHIPMENT STATUS
-            ================================================= */}
-
             <Panel title="Shipment Status">
+
               <StatusRow
                 label="Delivered"
                 value={
@@ -1067,11 +1080,8 @@ export default function CommandCenter() {
                   overview.total_shipments
                 }
               />
-            </Panel>
 
-            {/* =================================================
-                NETWORK
-            ================================================= */}
+            </Panel>
 
             <Panel title="Network Intelligence">
 
@@ -1110,10 +1120,6 @@ export default function CommandCenter() {
               />
 
             </Panel>
-
-            {/* =================================================
-                INFRASTRUCTURE
-            ================================================= */}
 
             <Panel title="Infrastructure">
 
@@ -1300,19 +1306,26 @@ export default function CommandCenter() {
                       </div>
 
                       <div className="flex items-center gap-3">
+
                         <button
                           type="button"
-                          onClick={() => analyzeShipment(shipment)}
+                          onClick={() =>
+                            analyzeShipment(
+                              shipment
+                            )
+                          }
                           className="text-[8px] font-semibold text-cyan-300 transition hover:text-white"
                         >
                           Analyze
                         </button>
+
                         <Link
                           href={`/shipments/${shipment.shipment_id}`}
                           className="text-[8px] text-slate-500 transition hover:text-cyan-300"
                         >
                           Open
                         </Link>
+
                       </div>
 
                     </div>
@@ -1339,15 +1352,19 @@ export default function CommandCenter() {
               FOOTER
           ================================================== */}
 
-          <footer className="mt-7 flex items-center justify-between px-1 text-[7px] font-bold tracking-[0.12em] text-slate-700">
+          <footer className="mt-7 flex flex-wrap items-center justify-between gap-3 px-1 text-[7px] font-bold tracking-[0.12em] text-slate-700">
 
             <span>
-              LOGISHIELD Â· NATIONAL LOGISTICS
+              LOGISHIELD · NATIONAL LOGISTICS
               COMMAND CENTER
             </span>
 
+            <span className="text-cyan-300/60">
+              DEVELOPED BY YASH SHELKE
+            </span>
+
             <span>
-              MODEL: LOGISHIELD-DELAY-V2 Â·{" "}
+              MODEL: LOGISHIELD-DELAY-V2 ·{" "}
               {error
                 ? "API DISCONNECTED"
                 : "LIVE"}
@@ -1386,18 +1403,26 @@ function ShipmentAnalysisModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-6 backdrop-blur-sm">
+
       <div className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-2xl border border-cyan-300/10 bg-[#081018] shadow-2xl">
+
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/[0.07] bg-[#081018]/95 px-6 py-5 backdrop-blur-xl">
+
           <div>
+
             <div className="text-[8px] font-bold tracking-[0.2em] text-cyan-300/60">
               LIVE SHIPMENT INTELLIGENCE
             </div>
+
             <h2 className="mt-2 text-lg font-semibold text-slate-100">
               {shipment.shipment_code}
             </h2>
+
             <div className="mt-1 text-[8px] text-slate-600">
-              {shipment.source_city} â†’ {shipment.destination_city}
+              {shipment.source_city} →{" "}
+              {shipment.destination_city}
             </div>
+
           </div>
 
           <button
@@ -1407,9 +1432,11 @@ function ShipmentAnalysisModal({
           >
             <X size={16} />
           </button>
+
         </div>
 
         <div className="p-6">
+
           {loading && (
             <div className="flex min-h-[300px] items-center justify-center">
               <div className="flex items-center gap-3 text-[10px] text-cyan-300">
@@ -1427,125 +1454,271 @@ function ShipmentAnalysisModal({
 
           {!loading && !error && prediction && (
             <>
+
               <div className="grid grid-cols-4 gap-4">
+
                 <MetricCard
-                  icon={<ShieldAlert size={18} />}
-                  value={prediction.prediction.delay_probability_percentage}
+                  icon={
+                    <ShieldAlert size={18} />
+                  }
+                  value={
+                    prediction.prediction
+                      .delay_probability_percentage
+                  }
                   label="Delay probability %"
-                  description={prediction.prediction.risk_level}
-                  danger={prediction.prediction.risk_level === "CRITICAL"}
+                  description={
+                    prediction.prediction
+                      .risk_level
+                  }
+                  danger={
+                    prediction.prediction
+                      .risk_level ===
+                    "CRITICAL"
+                  }
                 />
+
                 <MetricCard
-                  icon={<CloudRain size={18} />}
-                  value={prediction.conditions.weather_severity}
+                  icon={
+                    <CloudRain size={18} />
+                  }
+                  value={
+                    prediction.conditions
+                      .weather_severity
+                  }
                   label="Weather severity"
-                  description={prediction.conditions.weather}
+                  description={
+                    prediction.conditions.weather
+                  }
                 />
+
                 <MetricCard
-                  icon={<Waves size={18} />}
-                  value={prediction.conditions.traffic_severity}
+                  icon={
+                    <Waves size={18} />
+                  }
+                  value={
+                    prediction.conditions
+                      .traffic_severity
+                  }
                   label="Traffic severity"
-                  description={prediction.conditions.traffic}
+                  description={
+                    prediction.conditions.traffic
+                  }
                 />
+
                 <MetricCard
-                  icon={<Zap size={18} />}
-                  value={prediction.conditions.active_disruptions}
+                  icon={
+                    <Zap size={18} />
+                  }
+                  value={
+                    prediction.conditions
+                      .active_disruptions
+                  }
                   label="Active disruptions"
                   description="Current shipment exposure"
                 />
+
               </div>
 
               <div className="mt-5 grid grid-cols-2 gap-5">
+
                 <Panel title="ML Prediction">
+
                   <InfoRow
-                    icon={<Gauge size={16} />}
+                    icon={
+                      <Gauge size={16} />
+                    }
                     label="Probability"
                     value={`${prediction.prediction.delay_probability_percentage.toFixed(2)}%`}
-                    suffix={prediction.prediction.predicted_delayed ? "Predicted delayed" : "Predicted on-time"}
+                    suffix={
+                      prediction.prediction
+                        .predicted_delayed
+                        ? "Predicted delayed"
+                        : "Predicted on-time"
+                    }
                   />
+
                   <InfoRow
-                    icon={<ShieldAlert size={16} />}
+                    icon={
+                      <ShieldAlert size={16} />
+                    }
                     label="Risk level"
-                    value={prediction.prediction.risk_level}
+                    value={
+                      prediction.prediction
+                        .risk_level
+                    }
                     suffix="V2 classifier"
                   />
+
                   <InfoRow
-                    icon={<Route size={16} />}
+                    icon={
+                      <Route size={16} />
+                    }
                     label="Route risk"
-                    value={prediction.conditions.route_risk}
+                    value={
+                      prediction.conditions
+                        .route_risk
+                    }
                     suffix="route score"
                   />
+
                   <InfoRow
-                    icon={<Truck size={16} />}
+                    icon={
+                      <Truck size={16} />
+                    }
                     label="Vehicle utilization"
-                    value={`${(prediction.conditions.vehicle_utilization * 100).toFixed(2)}%`}
+                    value={`${(
+                      prediction.conditions
+                        .vehicle_utilization *
+                      100
+                    ).toFixed(2)}%`}
                     suffix="current shipment"
                   />
 
                   <div className="mt-5 space-y-2">
-                    {prediction.recommendations.map((item, index) => (
-                      <div
-                        key={`${item}-${index}`}
-                        className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-[9px] leading-5 text-slate-500"
-                      >
-                        {item}
-                      </div>
-                    ))}
+
+                    {prediction.recommendations.map(
+                      (item, index) => (
+                        <div
+                          key={`${item}-${index}`}
+                          className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-[9px] leading-5 text-slate-500"
+                        >
+                          {item}
+                        </div>
+                      )
+                    )}
+
                   </div>
+
                 </Panel>
 
                 <Panel title="Recovery Decision Engine">
+
                   {recovery ? (
                     <>
+
                       <div className="rounded-xl border border-cyan-300/10 bg-cyan-300/[0.035] p-4">
+
                         <div className="text-[8px] font-bold tracking-[0.15em] text-cyan-300/60">
                           RECOMMENDED STRATEGY
                         </div>
+
                         <div className="mt-2 text-lg font-bold text-cyan-300">
-                          {recommendation?.strategy ?? "NO_ACTION"}
+                          {recommendation?.strategy ??
+                            "NO_ACTION"}
                         </div>
+
                         <div className="mt-2 text-[9px] leading-5 text-slate-500">
                           {recommendation?.reason ??
                             "No recovery recommendation returned."}
                         </div>
+
                       </div>
 
                       <InfoRow
-                        icon={<ShieldAlert size={16} />}
+                        icon={
+                          <ShieldAlert size={16} />
+                        }
                         label="Intervention"
-                        value={recovery.risk?.intervention ?? "N/A"}
+                        value={
+                          recovery.risk
+                            ?.intervention ??
+                          "N/A"
+                        }
                         suffix="recovery engine"
                       />
+
                       <InfoRow
-                        icon={<Route size={16} />}
+                        icon={
+                          <Route size={16} />
+                        }
                         label="Operational risk"
-                        value={recovery.risk?.operational_risk ?? "N/A"}
+                        value={
+                          recovery.risk
+                            ?.operational_risk ??
+                          "N/A"
+                        }
                         suffix="score"
                       />
+
                       <InfoRow
-                        icon={<Map size={16} />}
+                        icon={
+                          <Map size={16} />
+                        }
                         label="Recovery options"
-                        value={recovery.option_count ?? 0}
+                        value={
+                          recovery.option_count ??
+                          0
+                        }
                         suffix="available options"
                       />
 
                       {recommendation && (
                         <div className="mt-4 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+
                           <div className="grid grid-cols-2 gap-4">
-                            <SmallValue label="Route" value={recommendation.route_code ?? "N/A"} />
-                            <SmallValue label="Vehicle" value={recommendation.vehicle_id != null ? `#${recommendation.vehicle_id}` : "N/A"} />
-                            <SmallValue label="Distance" value={formatNumber(recommendation.distance_km, " km")} />
-                            <SmallValue label="ETA" value={formatNumber(recommendation.estimated_time_hours, " h")} />
-                            <SmallValue label="Route risk" value={formatNumber(recommendation.route_risk)} />
-                            <SmallValue label="Recovery score" value={formatNumber(recommendation.recovery_score)} />
+
+                            <SmallValue
+                              label="Route"
+                              value={
+                                recommendation.route_code ??
+                                "N/A"
+                              }
+                            />
+
+                            <SmallValue
+                              label="Vehicle"
+                              value={
+                                recommendation.vehicle_id !=
+                                null
+                                  ? `#${recommendation.vehicle_id}`
+                                  : "N/A"
+                              }
+                            />
+
+                            <SmallValue
+                              label="Distance"
+                              value={formatNumber(
+                                recommendation.distance_km,
+                                " km"
+                              )}
+                            />
+
+                            <SmallValue
+                              label="ETA"
+                              value={formatNumber(
+                                recommendation.estimated_time_hours,
+                                " h"
+                              )}
+                            />
+
+                            <SmallValue
+                              label="Route risk"
+                              value={formatNumber(
+                                recommendation.route_risk
+                              )}
+                            />
+
+                            <SmallValue
+                              label="Recovery score"
+                              value={formatNumber(
+                                recommendation.recovery_score
+                              )}
+                            />
+
                           </div>
+
                         </div>
                       )}
+
                     </>
                   ) : (
-                    <div className="text-[9px] text-slate-600">No recovery result returned.</div>
+                    <div className="text-[9px] text-slate-600">
+                      No recovery result returned.
+                    </div>
                   )}
+
                 </Panel>
+
               </div>
 
               {recovery && (
@@ -1554,25 +1727,43 @@ function ShipmentAnalysisModal({
                 />
               )}
 
-              {Array.isArray(recovery?.explanation) && recovery.explanation.length > 0 ? (
+              {Array.isArray(
+                recovery?.explanation
+              ) &&
+              recovery.explanation.length > 0 ? (
                 <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.015] p-5">
-                  <div className="text-[8px] font-bold tracking-[0.15em] text-slate-600">ENGINE EXPLANATION</div>
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    {recovery.explanation.map((item, index) => (
-                      <div
-                        key={`${String(item)}-${index}`}
-                        className="rounded-lg border border-white/[0.05] bg-white/[0.02] px-4 py-3 text-[9px] text-slate-500"
-                      >
-                        {item}
-                      </div>
-                    ))}
+
+                  <div className="text-[8px] font-bold tracking-[0.15em] text-slate-600">
+                    ENGINE EXPLANATION
                   </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+
+                    {recovery.explanation.map(
+                      (item, index) => (
+                        <div
+                          key={`${String(
+                            item
+                          )}-${index}`}
+                          className="rounded-lg border border-white/[0.05] bg-white/[0.02] px-4 py-3 text-[9px] text-slate-500"
+                        >
+                          {item}
+                        </div>
+                      )
+                    )}
+
+                  </div>
+
                 </div>
               ) : null}
+
             </>
           )}
+
         </div>
+
       </div>
+
     </div>
   );
 }
@@ -1581,7 +1772,10 @@ function formatNumber(
   value: number | null | undefined,
   suffix = ""
 ): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value)
+  ) {
     return "N/A";
   }
 
@@ -1591,7 +1785,9 @@ function formatNumber(
 function getRecoveryRoutes(
   recovery: RecoveryData
 ): RecoveryRoute[] {
-  const legacyRoutes = Array.isArray(recovery.alternative_routes)
+  const legacyRoutes = Array.isArray(
+    recovery.alternative_routes
+  )
     ? recovery.alternative_routes
     : [];
 
@@ -1599,7 +1795,9 @@ function getRecoveryRoutes(
     return legacyRoutes;
   }
 
-  const paths = Array.isArray(recovery.recovery_paths)
+  const paths = Array.isArray(
+    recovery.recovery_paths
+  )
     ? recovery.recovery_paths
     : [];
 
@@ -1607,8 +1805,14 @@ function getRecoveryRoutes(
 
   for (const path of paths) {
     const nestedSegments = [
-      ...(Array.isArray(path.segments) ? path.segments : []),
-      ...(Array.isArray(path.route_segments) ? path.route_segments : []),
+      ...(Array.isArray(path.segments)
+        ? path.segments
+        : []),
+      ...(Array.isArray(
+        path.route_segments
+      )
+        ? path.route_segments
+        : []),
     ];
 
     if (nestedSegments.length > 0) {
@@ -1618,30 +1822,47 @@ function getRecoveryRoutes(
 
     flattened.push({
       route_id: path.route_id,
+
       route_code:
         path.route_code ??
         (Array.isArray(path.route_codes)
-          ? path.route_codes.join(" â†’ ")
+          ? path.route_codes.join(" → ")
           : null),
-      source_location_id: path.source_location_id,
-      destination_location_id: path.destination_location_id,
+
+      source_location_id:
+        path.source_location_id,
+
+      destination_location_id:
+        path.destination_location_id,
+
       distance_km:
         path.distance_km ??
         path.total_distance_km ??
         null,
+
       estimated_time_hours:
         path.estimated_time_hours ??
         path.total_time_hours ??
         null,
+
       base_cost:
         path.base_cost ??
         path.total_cost ??
         path.cost ??
         null,
-      risk_score: path.risk_score,
-      recovery_score: path.recovery_score,
-      route_status: path.route_status ?? path.status,
-      status: path.status,
+
+      risk_score:
+        path.risk_score,
+
+      recovery_score:
+        path.recovery_score,
+
+      route_status:
+        path.route_status ??
+        path.status,
+
+      status:
+        path.status,
     });
   }
 
@@ -1649,7 +1870,9 @@ function getRecoveryRoutes(
     return flattened;
   }
 
-  return Array.isArray(recovery.route_segments)
+  return Array.isArray(
+    recovery.route_segments
+  )
     ? recovery.route_segments
     : [];
 }
@@ -1659,13 +1882,19 @@ function RecoveryOptions({
 }: {
   recovery: RecoveryData;
 }) {
-  const routes = getRecoveryRoutes(recovery);
-  const vehicles = Array.isArray(recovery.alternative_vehicles)
-    ? recovery.alternative_vehicles
-    : [];
+  const routes =
+    getRecoveryRoutes(recovery);
+
+  const vehicles =
+    Array.isArray(
+      recovery.alternative_vehicles
+    )
+      ? recovery.alternative_vehicles
+      : [];
 
   return (
     <div className="mt-5 grid grid-cols-2 gap-5">
+
       <Panel
         title={
           recovery.recovery_paths?.length
@@ -1673,80 +1902,135 @@ function RecoveryOptions({
             : "Alternative Routes"
         }
       >
+
         {routes.length > 0 ? (
-          routes.slice(0, 5).map((route, index) => (
-            <div
-              key={`${route.route_id ?? route.route_code ?? "route"}-${index}`}
-              className="flex items-center justify-between border-b border-white/[0.05] py-3 last:border-0"
-            >
-              <div>
-                <div className="text-[9px] font-semibold text-slate-300">
-                  {route.route_code ?? `Route ${index + 1}`}
+
+          routes
+            .slice(0, 5)
+            .map((route, index) => (
+
+              <div
+                key={`${route.route_id ?? route.route_code ?? "route"}-${index}`}
+                className="flex items-center justify-between border-b border-white/[0.05] py-3 last:border-0"
+              >
+
+                <div>
+
+                  <div className="text-[9px] font-semibold text-slate-300">
+                    {route.route_code ??
+                      `Route ${index + 1}`}
+                  </div>
+
+                  <div className="mt-1 text-[7px] text-slate-600">
+                    {formatNumber(
+                      route.distance_km,
+                      " km"
+                    )}
+                    {" · "}
+                    {formatNumber(
+                      route.estimated_time_hours,
+                      " h"
+                    )}
+                  </div>
+
                 </div>
-                <div className="mt-1 text-[7px] text-slate-600">
-                  {formatNumber(route.distance_km, " km")} Â·{" "}
-                  {formatNumber(route.estimated_time_hours, " h")}
+
+                <div className="text-right">
+
+                  <div className="text-[9px] font-bold text-cyan-300">
+                    {formatNumber(
+                      route.recovery_score ??
+                        route.risk_score
+                    )}
+                  </div>
+
+                  <div className="text-[7px] text-slate-600">
+                    {route.recovery_score !=
+                    null
+                      ? "recovery score"
+                      : "route score"}
+                  </div>
+
                 </div>
+
               </div>
 
-              <div className="text-right">
-                <div className="text-[9px] font-bold text-cyan-300">
-                  {formatNumber(
-                    route.recovery_score ?? route.risk_score
-                  )}
-                </div>
-                <div className="text-[7px] text-slate-600">
-                  {route.recovery_score != null
-                    ? "recovery score"
-                    : "route score"}
-                </div>
-              </div>
-            </div>
-          ))
+            ))
+
         ) : (
+
           <div className="rounded-lg border border-white/[0.05] bg-white/[0.02] px-4 py-4 text-[9px] text-slate-600">
             No alternative recovery routes returned.
           </div>
+
         )}
+
       </Panel>
 
       <Panel title="Alternative Vehicles">
+
         {vehicles.length > 0 ? (
-          vehicles.slice(0, 5).map((vehicle, index) => (
-            <div
-              key={`${vehicle.vehicle_id ?? "vehicle"}-${index}`}
-              className="flex items-center justify-between border-b border-white/[0.05] py-3 last:border-0"
-            >
-              <div>
-                <div className="text-[9px] font-semibold text-slate-300">
-                  {vehicle.vehicle_id != null
-                    ? `Vehicle #${vehicle.vehicle_id}`
-                    : "Vehicle"}
+
+          vehicles
+            .slice(0, 5)
+            .map((vehicle, index) => (
+
+              <div
+                key={`${vehicle.vehicle_id ?? "vehicle"}-${index}`}
+                className="flex items-center justify-between border-b border-white/[0.05] py-3 last:border-0"
+              >
+
+                <div>
+
+                  <div className="text-[9px] font-semibold text-slate-300">
+                    {vehicle.vehicle_id !=
+                    null
+                      ? `Vehicle #${vehicle.vehicle_id}`
+                      : "Vehicle"}
+                  </div>
+
+                  <div className="mt-1 text-[7px] text-slate-600">
+                    {vehicle.vehicle_type ??
+                      "Unknown type"}
+                    {" · "}
+                    {typeof vehicle.capacity_kg ===
+                    "number"
+                      ? `${numberFormat(
+                          vehicle.capacity_kg
+                        )} kg`
+                      : "Capacity N/A"}
+                  </div>
+
                 </div>
-                <div className="mt-1 text-[7px] text-slate-600">
-                  {vehicle.vehicle_type ?? "Unknown type"} Â·{" "}
-                  {typeof vehicle.capacity_kg === "number"
-                    ? `${numberFormat(vehicle.capacity_kg)} kg`
-                    : "Capacity N/A"}
+
+                <div className="text-right">
+
+                  <div className="text-[9px] font-bold text-cyan-300">
+                    {formatNumber(
+                      vehicle.vehicle_score
+                    )}
+                  </div>
+
+                  <div className="text-[7px] text-slate-600">
+                    vehicle score
+                  </div>
+
                 </div>
+
               </div>
 
-              <div className="text-right">
-                <div className="text-[9px] font-bold text-cyan-300">
-                  {formatNumber(vehicle.vehicle_score)}
-                </div>
-                <div className="text-[7px] text-slate-600">
-                  vehicle score
-                </div>
-              </div>
-            </div>
-          ))
+            ))
+
         ) : (
+
           <div className="rounded-lg border border-white/[0.05] bg-white/[0.02] px-4 py-4 text-[9px] text-slate-600">
             No alternative vehicles returned.
           </div>
+
         )}
+
       </Panel>
+
     </div>
   );
 }
@@ -1760,8 +2044,15 @@ function SmallValue({
 }) {
   return (
     <div>
-      <div className="text-[7px] font-bold tracking-[0.1em] text-slate-700">{label}</div>
-      <div className="mt-1 text-[10px] font-semibold text-slate-300">{value}</div>
+
+      <div className="text-[7px] font-bold tracking-[0.1em] text-slate-700">
+        {label}
+      </div>
+
+      <div className="mt-1 text-[10px] font-semibold text-slate-300">
+        {value}
+      </div>
+
     </div>
   );
 }

@@ -35,6 +35,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, text
 
 from backend.recovery_engine import analyze_shipment
+from backend.ai_voice import router as ai_voice_router
 
 
 # ============================================================
@@ -291,6 +292,13 @@ app = FastAPI(
     ),
     version="2.0.1"
 )
+
+
+# ============================================================
+# AI VOICE ASSISTANT
+# ============================================================
+
+app.include_router(ai_voice_router)
 
 
 # ============================================================
@@ -1260,6 +1268,585 @@ def predict_shipment(
     }
 
 
+
+# ============================================================
+# CREATE SHIPMENT
+# ============================================================
+
+@app.post("/api/v1/shipments")
+def create_shipment(payload: dict[str, Any]):
+    """
+    Create one new shipment without replacing existing data.
+
+    The frontend may provide:
+        shipment_code
+        source_location_id
+        destination_location_id
+        departure_time
+        status
+        weather
+        traffic
+
+    The backend supplies compatible product, vehicle and route
+    values from the existing PostgreSQL master data so that the
+    new shipment can immediately work with the prediction engine.
+    """
+
+    shipment_code = safe_string(
+        payload.get("shipment_code"),
+        ""
+    ).strip()
+
+    if not shipment_code:
+        raise HTTPException(
+            status_code=400,
+            detail="shipment_code is required."
+        )
+
+    try:
+        source_location_id = int(
+            payload.get("source_location_id")
+        )
+        destination_location_id = int(
+            payload.get("destination_location_id")
+        )
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "source_location_id and "
+                "destination_location_id must be integers."
+            )
+        )
+
+    if source_location_id <= 0 or destination_location_id <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Location IDs must be positive integers."
+        )
+
+    if source_location_id == destination_location_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Origin and destination cannot be the same."
+        )
+
+    status = safe_string(
+        payload.get("status"),
+        "IN_TRANSIT"
+    ).strip().upper()
+
+    allowed_statuses = {
+        "IN_TRANSIT",
+        "DELIVERED",
+        "DELAYED",
+        "CANCELLED",
+    }
+
+    if status not in allowed_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Invalid status. Use one of: "
+                + ", ".join(sorted(allowed_statuses))
+            )
+        )
+
+    weather = safe_string(
+        payload.get("weather"),
+        "NORMAL"
+    ).strip().upper()
+
+    traffic = safe_string(
+        payload.get("traffic"),
+        "NORMAL"
+    ).strip().upper()
+
+    weather_severity_map = {
+        "NORMAL": 0,
+        "CLEAR": 0,
+        "CLOUDY": 1,
+        "LIGHT_RAIN": 2,
+        "RAIN": 2,
+        "HEAVY_RAIN": 4,
+        "STORM": 5,
+        "FLOOD": 5,
+    }
+
+    traffic_severity_map = {
+        "NORMAL": 0,
+        "LIGHT": 1,
+        "MODERATE": 2,
+        "HEAVY": 3,
+        "SEVERE": 3,
+    }
+
+    weather_severity = weather_severity_map.get(
+        weather,
+        0
+    )
+
+    traffic_severity = traffic_severity_map.get(
+        traffic,
+        0
+    )
+
+    departure_raw = payload.get("departure_time")
+
+    if not departure_raw:
+        departure_time = datetime.utcnow()
+    else:
+        try:
+            departure_time = pd.to_datetime(
+                departure_raw,
+                errors="raise"
+            ).to_pydatetime()
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Invalid departure_time. "
+                    "Use an ISO datetime."
+                )
+            )
+
+    if departure_time.tzinfo is not None:
+        departure_time = departure_time.replace(
+            tzinfo=None
+        )
+
+    try:
+        with engine.begin() as connection:
+            # ----------------------------------------------------
+            # Validate locations
+            # ----------------------------------------------------
+            locations = connection.execute(
+                text("""
+                    SELECT location_id
+                    FROM locations
+                    WHERE location_id IN (
+                        :source_location_id,
+                        :destination_location_id
+                    );
+                """),
+                {
+                    "source_location_id": source_location_id,
+                    "destination_location_id":
+                        destination_location_id,
+                }
+            ).scalars().all()
+
+            if len(locations) != 2:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "One or both location IDs do not exist "
+                        "in the locations table."
+                    )
+                )
+
+            # ----------------------------------------------------
+            # Find a route already defined for this origin/destination
+            # ----------------------------------------------------
+            route = connection.execute(
+                text("""
+                    SELECT
+                        route_id,
+                        distance_km,
+                        estimated_time_hours,
+                        risk_score,
+                        route_status
+                    FROM routes
+                    WHERE source_location_id =
+                        :source_location_id
+                      AND destination_location_id =
+                        :destination_location_id
+                    ORDER BY
+                        risk_score ASC,
+                        route_id ASC
+                    LIMIT 1;
+                """),
+                {
+                    "source_location_id": source_location_id,
+                    "destination_location_id":
+                        destination_location_id,
+                }
+            ).mappings().first()
+
+            if route is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "No route exists for the selected "
+                        "origin and destination."
+                    )
+                )
+
+            # ----------------------------------------------------
+            # Select product
+            # ----------------------------------------------------
+            product_id_raw = payload.get("product_id")
+
+            if product_id_raw is not None:
+                try:
+                    product_id = int(product_id_raw)
+                except (TypeError, ValueError):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="product_id must be an integer."
+                    )
+
+                product = connection.execute(
+                    text("""
+                        SELECT
+                            product_id,
+                            unit_weight_kg
+                        FROM products
+                        WHERE product_id = :product_id
+                        LIMIT 1;
+                    """),
+                    {"product_id": product_id}
+                ).mappings().first()
+
+                if product is None:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Selected product does not exist."
+                    )
+            else:
+                product = connection.execute(
+                    text("""
+                        SELECT
+                            product_id,
+                            unit_weight_kg
+                        FROM products
+                        ORDER BY product_id
+                        LIMIT 1;
+                    """)
+                ).mappings().first()
+
+                if product is None:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="No products are available."
+                    )
+
+                product_id = safe_int(
+                    product["product_id"]
+                )
+
+            # ----------------------------------------------------
+            # Select vehicle
+            # ----------------------------------------------------
+            vehicle_id_raw = payload.get("vehicle_id")
+
+            if vehicle_id_raw is not None:
+                try:
+                    vehicle_id = int(vehicle_id_raw)
+                except (TypeError, ValueError):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="vehicle_id must be an integer."
+                    )
+
+                vehicle = connection.execute(
+                    text("""
+                        SELECT
+                            vehicle_id,
+                            capacity_kg
+                        FROM vehicles
+                        WHERE vehicle_id = :vehicle_id
+                        LIMIT 1;
+                    """),
+                    {"vehicle_id": vehicle_id}
+                ).mappings().first()
+
+                if vehicle is None:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Selected vehicle does not exist."
+                    )
+            else:
+                vehicle = connection.execute(
+                    text("""
+                        SELECT
+                            vehicle_id,
+                            capacity_kg
+                        FROM vehicles
+                        ORDER BY vehicle_id
+                        LIMIT 1;
+                    """)
+                ).mappings().first()
+
+                if vehicle is None:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="No vehicles are available."
+                    )
+
+                vehicle_id = safe_int(
+                    vehicle["vehicle_id"]
+                )
+
+            # ----------------------------------------------------
+            # Quantity / weight
+            # ----------------------------------------------------
+            quantity = payload.get("quantity_units")
+
+            try:
+                quantity = int(quantity) if quantity is not None else 1
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail="quantity_units must be an integer."
+                )
+
+            if quantity <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="quantity_units must be greater than 0."
+                )
+
+            unit_weight = safe_float(
+                product["unit_weight_kg"],
+                1.0
+            )
+
+            weight_kg = payload.get("weight_kg")
+
+            try:
+                weight_kg = (
+                    float(weight_kg)
+                    if weight_kg is not None
+                    else round(quantity * unit_weight, 2)
+                )
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail="weight_kg must be a number."
+                )
+
+            if weight_kg <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="weight_kg must be greater than 0."
+                )
+
+            capacity_kg = safe_float(
+                vehicle["capacity_kg"],
+                0
+            )
+
+            if capacity_kg > 0 and weight_kg > capacity_kg:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Shipment weight ({weight_kg:.2f} kg) "
+                        f"exceeds vehicle capacity "
+                        f"({capacity_kg:.2f} kg)."
+                    )
+                )
+
+            # ----------------------------------------------------
+            # Expected delivery time
+            # ----------------------------------------------------
+            estimated_hours = safe_float(
+                route["estimated_time_hours"],
+                1.0
+            )
+
+            expected_delivery_time = (
+                departure_time
+                + pd.Timedelta(
+                    hours=max(
+                        estimated_hours,
+                        0.1
+                    )
+                ).to_pytimedelta()
+            )
+
+            actual_delivery_time = None
+
+            if status == "DELIVERED":
+                actual_delivery_time = expected_delivery_time
+
+            # ----------------------------------------------------
+            # Current active disruptions
+            # ----------------------------------------------------
+            disruption_row = connection.execute(
+                text("""
+                    SELECT
+                        COUNT(*) AS active_count,
+                        COALESCE(
+                            MAX(
+                                CASE severity
+                                    WHEN 'CRITICAL' THEN 5
+                                    WHEN 'HIGH' THEN 4
+                                    WHEN 'MEDIUM' THEN 3
+                                    WHEN 'LOW' THEN 2
+                                    ELSE 0
+                                END
+                            ),
+                            0
+                        ) AS max_severity
+                    FROM disruptions
+                    WHERE status = 'ACTIVE'
+                      AND (
+                            route_id = :route_id
+                            OR location_id IN (
+                                :source_location_id,
+                                :destination_location_id
+                            )
+                      );
+                """),
+                {
+                    "route_id": safe_int(route["route_id"]),
+                    "source_location_id": source_location_id,
+                    "destination_location_id":
+                        destination_location_id,
+                }
+            ).mappings().first()
+
+            active_disruptions = safe_int(
+                disruption_row.get("active_count")
+                if disruption_row else 0
+            )
+
+            max_disruption_severity = safe_int(
+                disruption_row.get("max_severity")
+                if disruption_row else 0
+            )
+
+            # ----------------------------------------------------
+            # Insert
+            # ----------------------------------------------------
+            existing = connection.execute(
+                text("""
+                    SELECT shipment_id
+                    FROM shipments
+                    WHERE shipment_code = :shipment_code
+                    LIMIT 1;
+                """),
+                {"shipment_code": shipment_code}
+            ).scalar()
+
+            if existing is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Shipment code '{shipment_code}' "
+                        "already exists."
+                    )
+                )
+
+            result = connection.execute(
+                text("""
+                    INSERT INTO shipments (
+                        shipment_code,
+                        product_id,
+                        source_location_id,
+                        destination_location_id,
+                        vehicle_id,
+                        quantity_units,
+                        weight_kg,
+                        departure_time,
+                        expected_delivery_time,
+                        actual_delivery_time,
+                        weather_condition,
+                        weather_severity,
+                        traffic_level,
+                        traffic_severity,
+                        active_disruptions,
+                        max_disruption_severity,
+                        status
+                    )
+                    VALUES (
+                        :shipment_code,
+                        :product_id,
+                        :source_location_id,
+                        :destination_location_id,
+                        :vehicle_id,
+                        :quantity_units,
+                        :weight_kg,
+                        :departure_time,
+                        :expected_delivery_time,
+                        :actual_delivery_time,
+                        :weather_condition,
+                        :weather_severity,
+                        :traffic_level,
+                        :traffic_severity,
+                        :active_disruptions,
+                        :max_disruption_severity,
+                        :status
+                    )
+                    RETURNING shipment_id;
+                """),
+                {
+                    "shipment_code": shipment_code,
+                    "product_id": product_id,
+                    "source_location_id":
+                        source_location_id,
+                    "destination_location_id":
+                        destination_location_id,
+                    "vehicle_id": vehicle_id,
+                    "quantity_units": quantity,
+                    "weight_kg": weight_kg,
+                    "departure_time": departure_time,
+                    "expected_delivery_time":
+                        expected_delivery_time,
+                    "actual_delivery_time":
+                        actual_delivery_time,
+                    "weather_condition": weather,
+                    "weather_severity":
+                        weather_severity,
+                    "traffic_level": traffic,
+                    "traffic_severity":
+                        traffic_severity,
+                    "active_disruptions":
+                        active_disruptions,
+                    "max_disruption_severity":
+                        max_disruption_severity,
+                    "status": status,
+                }
+            )
+
+            shipment_id = safe_int(
+                result.scalar_one()
+            )
+
+        return {
+            "system": "LogiShield",
+            "message": "Shipment created successfully.",
+            "shipment": {
+                "shipment_id": shipment_id,
+                "shipment_code": shipment_code,
+                "source_location_id":
+                    source_location_id,
+                "destination_location_id":
+                    destination_location_id,
+                "vehicle_id": vehicle_id,
+                "product_id": product_id,
+                "status": status,
+                "departure_time":
+                    safe_datetime(departure_time),
+                "expected_delivery_time":
+                    safe_datetime(expected_delivery_time),
+            }
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to create shipment: "
+                f"{str(error)}"
+            )
+        )
+
+
 # ============================================================
 # SHIPMENT LIST
 # ============================================================
@@ -1268,7 +1855,8 @@ def predict_shipment(
     "/api/v1/shipments"
 )
 def list_shipments(
-    limit: int = 20
+    limit: int = 20,
+    search: str = ""
 ):
 
     limit = max(
@@ -1307,8 +1895,15 @@ def list_shipments(
             AND r.destination_location_id =
                 s.destination_location_id
 
+        WHERE
+            :search = ''
+            OR s.shipment_code ILIKE :search_pattern
+            OR CAST(s.shipment_id AS TEXT) ILIKE :search_pattern
+            OR COALESCE(s.weather_condition, '') ILIKE :search_pattern
+            OR COALESCE(s.traffic_level, '') ILIKE :search_pattern
+
         ORDER BY
-            s.shipment_id
+            s.shipment_id DESC
 
         LIMIT :limit;
     """
@@ -1321,7 +1916,9 @@ def list_shipments(
                 text(query),
                 connection,
                 params={
-                    "limit": limit
+                    "limit": limit,
+                    "search": search.strip(),
+                    "search_pattern": f"%{search.strip()}%"
                 }
             )
 
